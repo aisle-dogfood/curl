@@ -1910,13 +1910,28 @@ static CURLcode gtls_connect_common(struct Curl_cfilter *cf,
       goto out;
     }
     else if(connssl->earlydata_state == ssl_earlydata_sending) {
-      result = gtls_send_earlydata(cf, data);
-      if(result)
-        goto out;
-      connssl->earlydata_state = ssl_earlydata_sent;
+      /* Check if pinned public key verification is required */
+#ifndef CURL_DISABLE_PROXY
+      const char *pinnedpubkey = Curl_ssl_cf_is_proxy(cf) ?
+        data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY] :
+        data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#else
+      const char *pinnedpubkey = data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#endif
+      
+      /* If pinned public key verification is required, defer early data
+         until after certificate verification in step3 */
+      if(!pinnedpubkey) {
+        result = gtls_send_earlydata(cf, data);
+        if(result)
+          goto out;
+        connssl->earlydata_state = ssl_earlydata_sent;
+      }
+      /* else: keep earlydata_state as ssl_earlydata_sending for step3 */
     }
     DEBUGASSERT((connssl->earlydata_state == ssl_earlydata_none) ||
-                (connssl->earlydata_state == ssl_earlydata_sent));
+                (connssl->earlydata_state == ssl_earlydata_sent) ||
+                (connssl->earlydata_state == ssl_earlydata_sending));
 #endif
     result = handshake(cf, data);
     if(result)
@@ -1934,6 +1949,16 @@ static CURLcode gtls_connect_common(struct Curl_cfilter *cf,
     result = gtls_verifyserver(cf, data, backend->gtls.session);
     if(result)
       goto out;
+
+#ifdef CURL_GNUTLS_EARLY_DATA
+    /* Send early data after certificate verification if it was deferred */
+    if(connssl->earlydata_state == ssl_earlydata_sending) {
+      result = gtls_send_earlydata(cf, data);
+      if(result)
+        goto out;
+      connssl->earlydata_state = ssl_earlydata_sent;
+    }
+#endif
 
     connssl->state = ssl_connection_complete;
 

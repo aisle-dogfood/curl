@@ -1671,12 +1671,27 @@ static CURLcode wssl_handshake(struct Curl_cfilter *cf,
 
 #ifdef WOLFSSL_EARLY_DATA
   if(connssl->earlydata_state == ssl_earlydata_sending) {
-    result = wssl_send_earlydata(cf, data);
-    if(result)
-      return result;
+    /* Check if pinned public key verification is required */
+#ifndef CURL_DISABLE_PROXY
+    const char *pinnedpubkey = Curl_ssl_cf_is_proxy(cf) ?
+      data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY] :
+      data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#else
+    const char *pinnedpubkey = data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#endif
+    
+    /* If pinned public key verification is required, defer early data
+       until after certificate verification in step3 */
+    if(!pinnedpubkey) {
+      result = wssl_send_earlydata(cf, data);
+      if(result)
+        return result;
+    }
+    /* else: keep earlydata_state as ssl_earlydata_sending for step3 */
   }
   DEBUGASSERT((connssl->earlydata_state == ssl_earlydata_none) ||
-              (connssl->earlydata_state == ssl_earlydata_sent));
+              (connssl->earlydata_state == ssl_earlydata_sent) ||
+              (connssl->earlydata_state == ssl_earlydata_sending));
 #else
   DEBUGASSERT(connssl->earlydata_state == ssl_earlydata_none);
 #endif /* WOLFSSL_EARLY_DATA */
@@ -2162,6 +2177,18 @@ static CURLcode wssl_connect(struct Curl_cfilter *cf,
       wssl->hs_result = result;
       goto out;
     }
+    
+#ifdef WOLFSSL_EARLY_DATA
+    /* Send early data after certificate verification if it was deferred */
+    if(connssl->earlydata_state == ssl_earlydata_sending) {
+      result = wssl_send_earlydata(cf, data);
+      if(result) {
+        wssl->hs_result = result;
+        goto out;
+      }
+    }
+#endif
+    
     /* handhshake was done without errors */
 #ifdef HAVE_ALPN
     if(connssl->alpn) {

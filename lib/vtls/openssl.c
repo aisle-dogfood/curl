@@ -5172,14 +5172,29 @@ static CURLcode ossl_connect(struct Curl_cfilter *cf,
       goto out;
     }
     else if(connssl->earlydata_state == ssl_earlydata_sending) {
-      result = ossl_send_earlydata(cf, data);
-      if(result)
-        goto out;
-      connssl->earlydata_state = ssl_earlydata_sent;
+      /* Check if pinned public key verification is required */
+#ifndef CURL_DISABLE_PROXY
+      const char *pinnedpubkey = Curl_ssl_cf_is_proxy(cf) ?
+        data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY] :
+        data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#else
+      const char *pinnedpubkey = data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#endif
+      
+      /* If pinned public key verification is required, defer early data
+         until after certificate verification in step3 */
+      if(!pinnedpubkey) {
+        result = ossl_send_earlydata(cf, data);
+        if(result)
+          goto out;
+        connssl->earlydata_state = ssl_earlydata_sent;
+      }
+      /* else: keep earlydata_state as ssl_earlydata_sending for step3 */
     }
 #endif
     DEBUGASSERT((connssl->earlydata_state == ssl_earlydata_none) ||
-                (connssl->earlydata_state == ssl_earlydata_sent));
+                (connssl->earlydata_state == ssl_earlydata_sent) ||
+                (connssl->earlydata_state == ssl_earlydata_sending));
 
     result = ossl_connect_step2(cf, data);
     if(result)
@@ -5191,6 +5206,17 @@ static CURLcode ossl_connect(struct Curl_cfilter *cf,
     result = ossl_connect_step3(cf, data);
     if(result)
       goto out;
+      
+#ifdef HAVE_OPENSSL_EARLYDATA
+    /* Send early data after certificate verification if it was deferred */
+    if(connssl->earlydata_state == ssl_earlydata_sending) {
+      result = ossl_send_earlydata(cf, data);
+      if(result)
+        goto out;
+      connssl->earlydata_state = ssl_earlydata_sent;
+    }
+#endif
+    
     connssl->connecting_state = ssl_connect_done;
 #ifdef HAVE_OPENSSL_EARLYDATA
     if(connssl->earlydata_state > ssl_earlydata_none) {
