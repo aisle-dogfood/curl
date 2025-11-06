@@ -748,11 +748,16 @@ cf_ssl_add_peer(struct Curl_easy *data,
     const char *ccert = conn_config ? conn_config->clientcert : NULL;
     const char *username = NULL, *password = NULL;
 #ifdef USE_TLS_SRP
-    username = conn_config ? conn_config->username : NULL;
-    password = conn_config ? conn_config->password : NULL;
+    if(conn_config) {
+      username = conn_config->username;
+      password = conn_config->password;
+    }
 #endif
     result = cf_ssl_scache_peer_init(peer, ssl_peer_key, ccert,
                                      username, password, NULL, NULL);
+    /* Clear sensitive pointers to prevent heap inspection */
+    username = NULL;
+    password = NULL;
     if(result)
       goto out;
     /* all ready */
