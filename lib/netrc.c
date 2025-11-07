@@ -242,7 +242,7 @@ static NETRCcode parsenetrc(struct store_netrc *store,
           keyword = NONE;
           found = 0;
           our_login = FALSE;
-          Curl_safefree(password);
+          Curl_safefree_sensitive(password);
           if(!specific_login)
             Curl_safefree(login);
         }
@@ -306,14 +306,14 @@ static NETRCcode parsenetrc(struct store_netrc *store,
           state = HOSTFOUND;
           keyword = NONE;
           found = 0;
-          Curl_safefree(password);
+          Curl_safefree_sensitive(password);
           if(!specific_login)
             Curl_safefree(login);
         }
         else if(curl_strequal("default", tok)) {
           state = HOSTVALID;
           retcode = NETRC_OK; /* we did find our host */
-          Curl_safefree(password);
+          Curl_safefree_sensitive(password);
           if(!specific_login)
             Curl_safefree(login);
         }

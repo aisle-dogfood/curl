@@ -285,8 +285,8 @@ static void free_primary_ssl_config(struct ssl_primary_config *sslc)
   Curl_safefree(sslc->signature_algorithms);
   Curl_safefree(sslc->CRLfile);
 #ifdef USE_TLS_SRP
-  Curl_safefree(sslc->username);
-  Curl_safefree(sslc->password);
+  Curl_safefree_sensitive(sslc->username);
+  Curl_safefree_sensitive(sslc->password);
 #endif
 }
 
