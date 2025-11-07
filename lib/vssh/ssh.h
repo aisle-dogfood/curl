@@ -143,7 +143,7 @@ struct ssh_conn {
   const char *authlist;       /* List of auth. methods, managed by libssh2 */
 
   /* common */
-  const char *passphrase;     /* pass-phrase to use */
+  char *passphrase;           /* pass-phrase to use */
   char *rsa_pub;              /* strdup'ed public key file */
   char *rsa;                  /* strdup'ed private key file */
   sshstate state;             /* always use ssh.c:state() to change state! */
