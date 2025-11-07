@@ -52,6 +52,10 @@ int main(int argc, char **argv)
   }
 
   libptr = dlopen(argv[1], 0);
+  if(!libptr) {
+    puts("Unable to load OpenSSL shared library");
+    return 1;
+  }
 
   ssl_version = (const char * (*)(int))dlsym(libptr, "SSLeay_version");
   if(!ssl_version) {
@@ -73,7 +77,7 @@ int main(int argc, char **argv)
   puts(version);
 
   /* Was a symbol argument given? */
-  if(argc > 1) {
+  if(argc > 2) {
     int status;
     struct dsc$descriptor_s symbol_dsc;
     struct dsc$descriptor_s value_dsc;
