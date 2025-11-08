@@ -315,10 +315,10 @@ CURLcode Curl_close(struct Curl_easy **datap)
 
   Curl_hash_destroy(&data->meta_hash);
 #ifndef CURL_DISABLE_PROXY
-  Curl_safefree(data->state.aptr.proxyuserpwd);
+  Curl_safefree_sensitive(data->state.aptr.proxyuserpwd);
 #endif
   Curl_safefree(data->state.aptr.uagent);
-  Curl_safefree(data->state.aptr.userpwd);
+  Curl_safefree_sensitive(data->state.aptr.userpwd);
   Curl_safefree(data->state.aptr.accept_encoding);
   Curl_safefree(data->state.aptr.rangeline);
   Curl_safefree(data->state.aptr.ref);
@@ -330,10 +330,10 @@ CURLcode Curl_close(struct Curl_easy **datap)
   Curl_safefree(data->state.aptr.rtsp_transport);
 #endif
   Curl_safefree(data->state.aptr.user);
-  Curl_safefree(data->state.aptr.passwd);
+  Curl_safefree_sensitive(data->state.aptr.passwd);
 #ifndef CURL_DISABLE_PROXY
   Curl_safefree(data->state.aptr.proxyuser);
-  Curl_safefree(data->state.aptr.proxypasswd);
+  Curl_safefree_sensitive(data->state.aptr.proxypasswd);
 #endif
 
 #if !defined(CURL_DISABLE_HTTP) && !defined(CURL_DISABLE_FORM_API)
@@ -592,17 +592,17 @@ void Curl_conn_free(struct Curl_easy *data, struct connectdata *conn)
   Curl_free_idnconverted_hostname(&conn->socks_proxy.host);
   Curl_safefree(conn->http_proxy.user);
   Curl_safefree(conn->socks_proxy.user);
-  Curl_safefree(conn->http_proxy.passwd);
-  Curl_safefree(conn->socks_proxy.passwd);
+  Curl_safefree_sensitive(conn->http_proxy.passwd);
+  Curl_safefree_sensitive(conn->socks_proxy.passwd);
   Curl_safefree(conn->http_proxy.host.rawalloc); /* http proxy name buffer */
   Curl_safefree(conn->socks_proxy.host.rawalloc); /* socks proxy name buffer */
 #endif
   Curl_sec_conn_destroy(conn);
   Curl_safefree(conn->user);
-  Curl_safefree(conn->passwd);
+  Curl_safefree_sensitive(conn->passwd);
   Curl_safefree(conn->sasl_authzid);
   Curl_safefree(conn->options);
-  Curl_safefree(conn->oauth_bearer);
+  Curl_safefree_sensitive(conn->oauth_bearer);
   Curl_safefree(conn->host.rawalloc); /* hostname buffer */
   Curl_safefree(conn->conn_to_host.rawalloc); /* hostname buffer */
   Curl_safefree(conn->hostname_resolve);
@@ -2307,7 +2307,7 @@ static CURLcode parse_proxy(struct Curl_easy *data,
     proxyuser = NULL;
     if(result)
       goto error;
-    Curl_safefree(proxyinfo->passwd);
+    Curl_safefree_sensitive(proxyinfo->passwd);
     if(!proxypasswd) {
       proxypasswd = strdup("");
       if(!proxypasswd) {
@@ -2758,7 +2758,7 @@ static CURLcode override_login(struct Curl_easy *data,
 #ifndef CURL_DISABLE_NETRC
   if(data->set.use_netrc == CURL_NETRC_REQUIRED) {
     Curl_safefree(*userp);
-    Curl_safefree(*passwdp);
+    Curl_safefree_sensitive(*passwdp);
   }
   conn->bits.netrc = FALSE;
   if(data->set.use_netrc && !data->set.str[STRING_USERNAME]) {
