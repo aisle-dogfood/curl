@@ -94,15 +94,25 @@ static CURLUcode parseurl_and_replace(const char *url, CURLU *u,
 static void free_urlhandle(struct Curl_URL *u)
 {
   free(u->scheme);
+  u->scheme = NULL;
   free(u->user);
+  u->user = NULL;
   free(u->password);
+  u->password = NULL;
   free(u->options);
+  u->options = NULL;
   free(u->host);
+  u->host = NULL;
   free(u->zoneid);
+  u->zoneid = NULL;
   free(u->port);
+  u->port = NULL;
   free(u->path);
+  u->path = NULL;
   free(u->query);
+  u->query = NULL;
   free(u->fragment);
+  u->fragment = NULL;
 }
 
 /*
