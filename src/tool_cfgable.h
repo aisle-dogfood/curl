@@ -62,6 +62,16 @@
 #define tool_safefree(ptr)                      \
   do { free((ptr)); (ptr) = NULL;} while(0)
 
+#define tool_secure_free(ptr)                   \
+  do {                                          \
+    if((ptr)) {                                 \
+      size_t len = strlen((ptr));               \
+      memset((ptr), 0, len);                    \
+      free((ptr));                              \
+      (ptr) = NULL;                             \
+    }                                           \
+  } while(0)
+
 extern struct GlobalConfig *global;
 
 struct State {
