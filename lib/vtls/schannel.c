@@ -589,7 +589,7 @@ schannel_acquire_credential_handle(struct Curl_cfilter *cf,
          en-US/3e7bc95f-b21a-4bcd-bd2c-7f996718cae5
       */
       CRYPT_DATA_BLOB datablob;
-      WCHAR* pszPassword;
+      WCHAR* pszPassword = NULL;
       size_t pwd_len = 0;
       int str_w_len = 0;
       int cert_find_flags;
