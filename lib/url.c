@@ -212,6 +212,13 @@ static void up_free(struct Curl_easy *data)
   Curl_safefree(up->hostname);
   Curl_safefree(up->port);
   Curl_safefree(up->user);
+  /* Securely clear password before freeing to prevent heap inspection */
+  if(up->password) {
+    size_t len = strlen(up->password);
+    volatile char *vptr = (volatile char *)up->password;
+    while(len--)
+      vptr[len] = 0;
+  }
   Curl_safefree(up->password);
   Curl_safefree(up->options);
   Curl_safefree(up->path);
