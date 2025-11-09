@@ -191,6 +191,9 @@ static void cf_ssl_scache_clear_peer(struct Curl_ssl_scache_peer *peer)
   Curl_safefree(peer->clientcert);
 #ifdef USE_TLS_SRP
   Curl_safefree(peer->srp_username);
+  if(peer->srp_password) {
+    memset(peer->srp_password, 0, strlen(peer->srp_password));
+  }
   Curl_safefree(peer->srp_password);
 #endif
   Curl_safefree(peer->ssl_peer_key);
