@@ -170,7 +170,7 @@ static char *dynconvert(int dccsid, const char *s, int slen, int sccsid)
 
   /* Like convert, but the destination is allocated and returned. */
 
-  dlen = (size_t) (slen < 0 ? strlen(s) : slen) + 1;
+  dlen = (size_t) (slen < 0 ? strlen(s) + 1 : slen);
   dlen *= MAX_CONV_EXPANSION;           /* Allow some expansion. */
   d = malloc(dlen);
 
