@@ -120,13 +120,32 @@ size_t tool_read_cb(char *buffer, size_t sz, size_t nmemb, void *userdata)
     }
   }
   if((per->uploadfilesize != -1) &&
-     (per->uploadedsofar + rc > per->uploadfilesize)) {
+     (per->uploadedsofar > per->uploadfilesize ||
+      rc > per->uploadfilesize - per->uploadedsofar)) {
     /* do not allow uploading more than originally set out to do */
-    curl_off_t delta = per->uploadedsofar + rc - per->uploadfilesize;
+    curl_off_t delta;
+    /* Calculate delta safely to avoid overflow */
+    if(per->uploadedsofar >= per->uploadfilesize) {
+      /* Already exceeded the limit, delta is at least rc */
+      delta = rc;
+      if(per->uploadedsofar > per->uploadfilesize) {
+        /* Add the amount already over the limit */
+        delta += per->uploadedsofar - per->uploadfilesize;
+      }
+    }
+    else {
+      /* Would exceed limit with this read */
+      delta = rc - (per->uploadfilesize - per->uploadedsofar);
+    }
     warnf("File size larger in the end than when "
           "started. Dropping at least %" CURL_FORMAT_CURL_OFF_T " bytes",
           delta);
-    rc = (ssize_t)(per->uploadfilesize - per->uploadedsofar);
+    if(per->uploadedsofar >= per->uploadfilesize) {
+      rc = 0; /* Already at or past the limit, don't read more */
+    }
+    else {
+      rc = (ssize_t)(per->uploadfilesize - per->uploadedsofar);
+    }
   }
   config->readbusy = FALSE;
 
