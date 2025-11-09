@@ -123,9 +123,6 @@ struct OperationConfig {
   struct getout *url_out;   /* point to the node to fill in outfile */
   struct getout *url_ul;    /* point to the node to fill in upload */
   size_t num_urls;          /* number of URLs added to the list */
-#ifndef CURL_DISABLE_IPFS
-  char *ipfs_gateway;
-#endif /* !CURL_DISABLE_IPFS */
   char *doh_url;
   char *cipher_list;
   char *proxy_cipher_list;
@@ -139,6 +136,9 @@ struct OperationConfig {
   char *proxy_cacert;
   char *capath;
   char *proxy_capath;
+#ifndef CURL_DISABLE_IPFS
+  char *ipfs_gateway;
+#endif /* !CURL_DISABLE_IPFS */
   char *crlfile;
   char *proxy_crlfile;
   char *pinnedpubkey;
