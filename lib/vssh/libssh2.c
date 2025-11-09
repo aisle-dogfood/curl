@@ -1295,9 +1295,24 @@ static CURLcode ssh_state_pkey_init(struct Curl_easy *data,
       return CURLE_OUT_OF_MEMORY;
     }
 
-    sshc->passphrase = data->set.ssl.key_passwd;
-    if(!sshc->passphrase)
-      sshc->passphrase = "";
+    if(data->set.ssl.key_passwd) {
+      sshc->passphrase = strdup(data->set.ssl.key_passwd);
+      if(!sshc->passphrase) {
+        Curl_safefree(sshc->rsa);
+        Curl_safefree(sshc->rsa_pub);
+        myssh_state(data, sshc, SSH_SESSION_FREE);
+        return CURLE_OUT_OF_MEMORY;
+      }
+    }
+    else {
+      sshc->passphrase = strdup("");
+      if(!sshc->passphrase) {
+        Curl_safefree(sshc->rsa);
+        Curl_safefree(sshc->rsa_pub);
+        myssh_state(data, sshc, SSH_SESSION_FREE);
+        return CURLE_OUT_OF_MEMORY;
+      }
+    }
 
     if(sshc->rsa_pub)
       infof(data, "Using SSH public key file '%s'", sshc->rsa_pub);
@@ -3672,6 +3687,11 @@ static CURLcode sshc_cleanup(struct ssh_conn *sshc, struct Curl_easy *data,
 
   Curl_safefree(sshc->rsa_pub);
   Curl_safefree(sshc->rsa);
+  if(sshc->passphrase) {
+    /* Clear sensitive passphrase data before freeing */
+    memset(sshc->passphrase, 0, strlen(sshc->passphrase));
+    Curl_safefree(sshc->passphrase);
+  }
   Curl_safefree(sshc->quote_path1);
   Curl_safefree(sshc->quote_path2);
   Curl_safefree(sshc->homedir);
