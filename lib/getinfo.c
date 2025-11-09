@@ -211,7 +211,10 @@ static CURLcode getinfo_long(struct Curl_easy *data, CURLINFO info,
     curlx_str_number(&timestr, &val, TIME_T_MAX);
     switch(info) {
     case CURLINFO_LOCAL_PORT:
-      *param_longp = (long)val;
+      if(val > LONG_MAX)
+        *param_longp = LONG_MAX;
+      else
+        *param_longp = (long)val;
       return CURLE_OK;
     default:
       break;
@@ -225,7 +228,10 @@ static CURLcode getinfo_long(struct Curl_easy *data, CURLINFO info,
     switch(info) {
     case CURLINFO_HEADER_SIZE:
     case CURLINFO_REQUEST_SIZE:
-      *param_longp = (long)val;
+      if(val > LONG_MAX)
+        *param_longp = LONG_MAX;
+      else
+        *param_longp = (long)val;
       return CURLE_OK;
     default:
       break;
@@ -251,10 +257,16 @@ static CURLcode getinfo_long(struct Curl_easy *data, CURLINFO info,
       *param_longp = (long)data->info.filetime;
     break;
   case CURLINFO_HEADER_SIZE:
-    *param_longp = (long)data->info.header_size;
+    if(data->info.header_size > LONG_MAX)
+      *param_longp = LONG_MAX;
+    else
+      *param_longp = (long)data->info.header_size;
     break;
   case CURLINFO_REQUEST_SIZE:
-    *param_longp = (long)data->info.request_size;
+    if(data->info.request_size > LONG_MAX)
+      *param_longp = LONG_MAX;
+    else
+      *param_longp = (long)data->info.request_size;
     break;
   case CURLINFO_SSL_VERIFYRESULT:
     *param_longp = data->set.ssl.certverifyresult;
