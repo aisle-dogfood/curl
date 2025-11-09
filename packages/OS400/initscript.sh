@@ -144,23 +144,24 @@ canonicalize_path()
         fi
 
         R=
-        IFSSAVE="${IFS}"
-        IFS="/"
 
-        for C in ${P}
-        do      IFS="${IFSSAVE}"
-                case "${C}" in
-                .)      ;;
-                ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
-                        ;;
-                ?*)     R="${R}${C}/"
-                        ;;
-                *)      ;;
-                esac
-        done
-
-        IFS="${IFSSAVE}"
-        echo "/$(expr "${R}" : '^\(.*\)/')"
+        # Use local IFS setting to avoid global tampering
+        # Process path components in a subshell to isolate IFS changes
+        echo "$(
+                IFS="/"
+                R=
+                for C in ${P}
+                do      case "${C}" in
+                        .)      ;;
+                        ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
+                                ;;
+                        ?*)     R="${R}${C}/"
+                                ;;
+                        *)      ;;
+                        esac
+                done
+                echo "/$(expr "${R}" : '^\(.*\)/')"
+        )"
 }
 
 
