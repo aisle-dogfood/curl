@@ -1725,7 +1725,7 @@ static CURLUcode urlset_clear(CURLU *u, CURLUPart what)
     Curl_safefree(u->user);
     break;
   case CURLUPART_PASSWORD:
-    Curl_safefree(u->password);
+    Curl_safefree_sensitive(u->password);
     break;
   case CURLUPART_OPTIONS:
     Curl_safefree(u->options);

@@ -988,6 +988,23 @@ extern curl_calloc_callback Curl_ccalloc;
 #define Curl_safefree(ptr) \
   do { free((ptr)); (ptr) = NULL;} while(0)
 
+/*
+ * Curl_safefree_sensitive defined as a macro to securely clear sensitive
+ * data from memory before freeing it. This prevents heap inspection attacks
+ * where sensitive data could be recovered from freed memory.
+ */
+#define Curl_safefree_sensitive(ptr) \
+  do { \
+    if(ptr) { \
+      size_t len = strlen((char *)(ptr)); \
+      if(len > 0) { \
+        memset((ptr), 0, len); \
+      } \
+      free((ptr)); \
+      (ptr) = NULL; \
+    } \
+  } while(0)
+
 #ifdef CURLDEBUG
 #ifdef __clang__
 #  define ALLOC_FUNC         __attribute__((__malloc__))

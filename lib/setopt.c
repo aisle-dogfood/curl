@@ -2032,7 +2032,7 @@ static CURLcode setopt_cptr(struct Curl_easy *data, CURLoption option,
                               REJECT_ZERO);
     }
     if(!result && p) {
-      Curl_safefree(s->str[STRING_PROXYPASSWORD]);
+      Curl_safefree_sensitive(s->str[STRING_PROXYPASSWORD]);
       result = Curl_urldecode(p, 0, &s->str[STRING_PROXYPASSWORD], NULL,
                               REJECT_ZERO);
     }
