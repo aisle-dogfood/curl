@@ -62,6 +62,17 @@
 #define tool_safefree(ptr)                      \
   do { free((ptr)); (ptr) = NULL;} while(0)
 
+#define tool_safefree_sensitive(ptr)            \
+  do {                                          \
+    if((ptr)) {                                 \
+      volatile char *vptr = (volatile char *)(ptr); \
+      size_t len = strlen((ptr));               \
+      while(len--) vptr[len] = 0;               \
+      free((ptr));                              \
+      (ptr) = NULL;                             \
+    }                                           \
+  } while(0)
+
 extern struct GlobalConfig *global;
 
 struct State {
