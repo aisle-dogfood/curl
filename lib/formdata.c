@@ -70,8 +70,13 @@ AddHttpPost(struct FormInfo *src,
 {
   struct curl_httppost *post;
   size_t namelength = src->namelength;
-  if(!namelength && src->name)
+  if(!namelength && src->name) {
+    /* If HTTPPOST_PTRNAME is set, namelength must be provided to avoid
+       calling strlen() on potentially unterminated data */
+    if(src->flags & HTTPPOST_PTRNAME)
+      return NULL;
     namelength = strlen(src->name);
+  }
   if((src->bufferlength > LONG_MAX) || (namelength > LONG_MAX))
     /* avoid overflow in typecasts below */
     return NULL;
@@ -270,6 +275,10 @@ static CURLFORMcode FormAddCheck(struct FormInfo *first_form,
     if(form->name && form->namelength) {
       if(memchr(form->name, 0, form->namelength))
         return CURL_FORMADD_NULL;
+    }
+    /* If HTTPPOST_PTRNAME is set, namelength must be provided */
+    if((form->flags & HTTPPOST_PTRNAME) && form->name && !form->namelength) {
+      return CURL_FORMADD_INCOMPLETE;
     }
     if(!(form->flags & HTTPPOST_PTRNAME) && form->name) {
       /* Note that there is small risk that form->name is NULL here if the app
