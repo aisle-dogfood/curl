@@ -127,13 +127,33 @@ convert(char *d, size_t dlen, int dccsid,
     dccsid = ASCII_CCSID;
 
   if(sccsid == dccsid) {
-    lslen = slen >= 0 ? slen : strlen(s) + 1;
-    i = lslen < dlen ? lslen : dlen;
-
-    if(s != d && i > 0)
-      memcpy(d, s, i);
-
-    return i;
+    if(slen >= 0) {
+      /* Fixed length source */
+      lslen = slen;
+      i = lslen < dlen ? lslen : dlen;
+      if(s != d && i > 0)
+        memcpy(d, s, i);
+      return i;
+    }
+    else {
+      /* Null-terminated source string */
+      lslen = strlen(s);
+      if(lslen < dlen) {
+        /* Destination has enough space for string + null terminator */
+        if(s != d)
+          memcpy(d, s, lslen + 1);
+        return lslen + 1;
+      }
+      else {
+        /* Destination too small, copy what fits and ensure null termination */
+        if(dlen > 0) {
+          if(s != d)
+            memcpy(d, s, dlen - 1);
+          d[dlen - 1] = '\0';
+        }
+        return dlen;
+      }
+    }
     }
 
   if(slen < 0) {
