@@ -546,6 +546,11 @@ Curl_ldap_simple_bind_s_a(void *ld, char *dn, char *passwd)
   char *edn;
   char *epasswd;
 
+  /* Prevent anonymous LDAP binding - require both dn and passwd */
+  if(!dn || !passwd || !*dn || !*passwd) {
+    return LDAP_INVALID_CREDENTIALS;
+  }
+
   edn = (char *) NULL;
   epasswd = (char *) NULL;
 
