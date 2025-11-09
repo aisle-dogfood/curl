@@ -184,20 +184,18 @@ static char *dynconvert(int dccsid, const char *s, int slen, int sccsid)
     return (char *) NULL;
     }
 
-  if(slen < 0) {
-    /* Need to null-terminate even when source length is given.
-       Since destination code size is unknown, use a conversion to generate
-       terminator. */
+  /* Always null-terminate the result.
+     Since destination code size is unknown, use a conversion to generate
+     terminator. */
 
-    int l2 = convert(d + l, dlen - l, dccsid, &nullbyte, -1, ASCII_CCSID);
+  int l2 = convert(d + l, dlen - l, dccsid, &nullbyte, -1, ASCII_CCSID);
 
-    if(l2 < 0) {
-      free(d);
-      return (char *) NULL;
-      }
-
-    l += l2;
+  if(l2 < 0) {
+    free(d);
+    return (char *) NULL;
     }
+
+  l += l2;
 
   if((size_t) l < dlen) {
     cp = realloc(d, l);         /* Shorten to minimum needed. */
