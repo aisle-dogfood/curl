@@ -624,7 +624,7 @@ static CURLcode rtsp_do(struct Curl_easy *data, bool *done)
    * Free userpwd now --- cannot reuse this for Negotiate and possibly NTLM
    * with basic and digest, it will be freed anyway by the next request
    */
-  Curl_safefree(data->state.aptr.userpwd);
+  Curl_safefree_sensitive(data->state.aptr.userpwd);
 
   if(result)
     goto out;

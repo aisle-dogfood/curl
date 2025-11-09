@@ -315,10 +315,10 @@ CURLcode Curl_close(struct Curl_easy **datap)
 
   Curl_hash_destroy(&data->meta_hash);
 #ifndef CURL_DISABLE_PROXY
-  Curl_safefree(data->state.aptr.proxyuserpwd);
+  Curl_safefree_sensitive(data->state.aptr.proxyuserpwd);
 #endif
   Curl_safefree(data->state.aptr.uagent);
-  Curl_safefree(data->state.aptr.userpwd);
+  Curl_safefree_sensitive(data->state.aptr.userpwd);
   Curl_safefree(data->state.aptr.accept_encoding);
   Curl_safefree(data->state.aptr.rangeline);
   Curl_safefree(data->state.aptr.ref);

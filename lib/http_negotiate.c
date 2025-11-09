@@ -224,12 +224,12 @@ CURLcode Curl_output_negotiate(struct Curl_easy *data,
 
     if(proxy) {
 #ifndef CURL_DISABLE_PROXY
-      free(data->state.aptr.proxyuserpwd);
+      Curl_safefree_sensitive(data->state.aptr.proxyuserpwd);
       data->state.aptr.proxyuserpwd = userp;
 #endif
     }
     else {
-      free(data->state.aptr.userpwd);
+      Curl_safefree_sensitive(data->state.aptr.userpwd);
       data->state.aptr.userpwd = userp;
     }
 
