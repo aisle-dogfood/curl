@@ -2785,6 +2785,10 @@ static void sshc_cleanup(struct ssh_conn *sshc)
     curlx_dyn_free(&sshc->readdir_buf);
     Curl_safefree(sshc->readdir_linkPath);
     SSH_STRING_FREE_CHAR(sshc->homedir);
+
+    /* Clear the passphrase pointer to prevent heap inspection vulnerability */
+    sshc->passphrase = NULL;
+
     sshc->initialised = FALSE;
   }
 }
