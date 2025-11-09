@@ -34,11 +34,57 @@
 #include <libclidef.h>
 #include <stsdef.h>
 #include <errno.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <limits.h>
 
 unsigned long LIB$SET_SYMBOL(
   const struct dsc$descriptor_s * symbol,
   const struct dsc$descriptor_s * value,
   const unsigned long *table_type);
+
+/* Validate that the library path is safe to load */
+static int validate_library_path(const char *path)
+{
+  struct stat st;
+  char resolved_path[PATH_MAX];
+  
+  /* Check if file exists and get its properties */
+  if(stat(path, &st) != 0) {
+    fprintf(stderr, "Error: Cannot access file %s: %s\n", path, strerror(errno));
+    return 0;
+  }
+  
+  /* Ensure it's a regular file */
+  if(!S_ISREG(st.st_mode)) {
+    fprintf(stderr, "Error: %s is not a regular file\n", path);
+    return 0;
+  }
+  
+  /* Resolve the real path to prevent directory traversal attacks */
+  if(realpath(path, resolved_path) == NULL) {
+    fprintf(stderr, "Error: Cannot resolve path %s: %s\n", path, strerror(errno));
+    return 0;
+  }
+  
+  /* Check that the resolved path is in a trusted location */
+  /* On VMS, OpenSSL libraries are typically in SYS$SHARE or similar system directories */
+  if(strncmp(resolved_path, "/sys$share/", 11) != 0 &&
+     strncmp(resolved_path, "/usr/lib/", 9) != 0 &&
+     strncmp(resolved_path, "/opt/", 5) != 0) {
+    fprintf(stderr, "Error: Library %s is not in a trusted location\n", resolved_path);
+    return 0;
+  }
+  
+  /* Check file permissions - should not be world-writable */
+  if(st.st_mode & S_IWOTH) {
+    fprintf(stderr, "Error: Library %s is world-writable, potential security risk\n", path);
+    return 0;
+  }
+  
+  return 1;
+}
 
 int main(int argc, char **argv)
 {
@@ -46,12 +92,21 @@ int main(int argc, char **argv)
   const char * (*ssl_version)(int t);
   const char *version;
 
-  if(argc < 1) {
+  if(argc < 2) {
     puts("report_openssl_version filename");
     return 1;
   }
 
-  libptr = dlopen(argv[1], 0);
+  /* Validate the library path before loading */
+  if(!validate_library_path(argv[1])) {
+    return 1;
+  }
+
+  libptr = dlopen(argv[1], RTLD_LAZY | RTLD_LOCAL);
+  if(!libptr) {
+    fprintf(stderr, "Error: Failed to load library %s: %s\n", argv[1], dlerror());
+    return 1;
+  }
 
   ssl_version = (const char * (*)(int))dlsym(libptr, "SSLeay_version");
   if(!ssl_version) {
@@ -61,19 +116,21 @@ int main(int argc, char **argv)
     }
   }
 
-  dlclose(libptr);
-
   if(!ssl_version) {
-    puts("Unable to lookup version of OpenSSL");
+    fprintf(stderr, "Error: Unable to lookup version function in OpenSSL library\n");
+    dlclose(libptr);
     return 1;
   }
 
   version = ssl_version(SSLEAY_VERSION);
+  
+  /* Close the library after getting the version string */
+  dlclose(libptr);
 
   puts(version);
 
   /* Was a symbol argument given? */
-  if(argc > 1) {
+  if(argc > 2) {
     int status;
     struct dsc$descriptor_s symbol_dsc;
     struct dsc$descriptor_s value_dsc;
