@@ -601,8 +601,15 @@ static CURLcode checkpasswd(const char *kind, /* for what purpose */
       return CURLE_OUT_OF_MEMORY;
 
     /* return the new string */
-    free(*userpwd);
-    *userpwd = curlx_dyn_ptr(&dyn);
+    char *newptr = curlx_dyn_ptr(&dyn);
+    if(newptr) {
+      free(*userpwd);
+      *userpwd = newptr;
+    }
+    else {
+      curlx_dyn_free(&dyn);
+      return CURLE_OUT_OF_MEMORY;
+    }
   }
 
   return CURLE_OK;
