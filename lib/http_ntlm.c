@@ -209,7 +209,7 @@ CURLcode Curl_output_ntlm(struct Curl_easy *data, bool proxy)
       result = curlx_base64_encode((const char *) Curl_bufref_ptr(&ntlmmsg),
                                   Curl_bufref_len(&ntlmmsg), &base64, &len);
       if(!result) {
-        free(*allocuserpwd);
+        Curl_safefree_sensitive(*allocuserpwd);
         *allocuserpwd = aprintf("%sAuthorization: NTLM %s\r\n",
                                 proxy ? "Proxy-" : "",
                                 base64);
@@ -228,7 +228,7 @@ CURLcode Curl_output_ntlm(struct Curl_easy *data, bool proxy)
       result = curlx_base64_encode((const char *) Curl_bufref_ptr(&ntlmmsg),
                                    Curl_bufref_len(&ntlmmsg), &base64, &len);
       if(!result) {
-        free(*allocuserpwd);
+        Curl_safefree_sensitive(*allocuserpwd);
         *allocuserpwd = aprintf("%sAuthorization: NTLM %s\r\n",
                                 proxy ? "Proxy-" : "",
                                 base64);
@@ -250,7 +250,7 @@ CURLcode Curl_output_ntlm(struct Curl_easy *data, bool proxy)
       data->info.proxyauthpicked = CURLAUTH_NTLM;
     else
       data->info.httpauthpicked = CURLAUTH_NTLM;
-    Curl_safefree(*allocuserpwd);
+    Curl_safefree_sensitive(*allocuserpwd);
     authp->done = TRUE;
     break;
   }

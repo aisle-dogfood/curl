@@ -2937,9 +2937,9 @@ out:
 
   /* clear userpwd and proxyuserpwd to avoid reusing old credentials
    * from reused connections */
-  Curl_safefree(data->state.aptr.userpwd);
+  Curl_safefree_sensitive(data->state.aptr.userpwd);
 #ifndef CURL_DISABLE_PROXY
-  Curl_safefree(data->state.aptr.proxyuserpwd);
+  Curl_safefree_sensitive(data->state.aptr.proxyuserpwd);
 #endif
   curlx_dyn_free(&req);
   return result;
