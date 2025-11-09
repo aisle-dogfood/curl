@@ -592,7 +592,7 @@ schannel_acquire_credential_handle(struct Curl_cfilter *cf,
       WCHAR* pszPassword;
       size_t pwd_len = 0;
       int str_w_len = 0;
-      int cert_find_flags;
+      int cert_find_flags = 0;
       const char *cert_showfilename_error = blob ?
         "(memory blob)" : data->set.ssl.primary.clientcert;
       curlx_unicodefree(cert_path);
