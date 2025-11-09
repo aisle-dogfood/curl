@@ -404,7 +404,7 @@ end:
   if(packet)
     free(packet);
   Curl_safefree(data->state.aptr.user);
-  Curl_safefree(data->state.aptr.passwd);
+  Curl_safefree_sensitive(data->state.aptr.passwd);
   return result;
 }
 
