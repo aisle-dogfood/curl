@@ -3676,6 +3676,9 @@ static CURLcode sshc_cleanup(struct ssh_conn *sshc, struct Curl_easy *data,
   Curl_safefree(sshc->quote_path2);
   Curl_safefree(sshc->homedir);
 
+  /* Clear the passphrase pointer to prevent heap inspection vulnerability */
+  sshc->passphrase = NULL;
+
   return CURLE_OK;
 }
 

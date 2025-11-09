@@ -1108,6 +1108,9 @@ static void wssh_sshc_cleanup(struct ssh_conn *sshc)
     sshc->ctx = NULL;
   }
   Curl_safefree(sshc->homedir);
+
+  /* Clear the passphrase pointer to prevent heap inspection vulnerability */
+  sshc->passphrase = NULL;
 }
 
 #if 0
