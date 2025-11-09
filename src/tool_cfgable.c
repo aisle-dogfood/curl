@@ -80,6 +80,7 @@ static void free_config_fields(struct OperationConfig *config)
   tool_safefree(config->range);
 
   tool_safefree(config->userpwd);
+  tool_safefree(config->login_options);
   tool_safefree(config->tls_username);
   tool_safefree(config->tls_password);
   tool_safefree(config->tls_authtype);
@@ -132,7 +133,6 @@ static void free_config_fields(struct OperationConfig *config)
   tool_safefree(config->cert_type);
   tool_safefree(config->proxy_cert_type);
   tool_safefree(config->cacert);
-  tool_safefree(config->login_options);
   tool_safefree(config->proxy_cacert);
   tool_safefree(config->capath);
   tool_safefree(config->proxy_capath);
