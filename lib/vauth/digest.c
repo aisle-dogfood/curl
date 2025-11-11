@@ -719,7 +719,7 @@ static CURLcode auth_create_digest_http_message(
   }
 
   /*
-    If the algorithm is "MD5" or unspecified (which then defaults to MD5):
+    If the algorithm is "MD5" or unspecified (which then defaults to SHA256):
 
       A1 = unq(username-value) ":" unq(realm-value) ":" passwd
 
@@ -1005,7 +1005,7 @@ void Curl_auth_digest_cleanup(struct digestdata *digest)
   Curl_safefree(digest->algorithm);
 
   digest->nc = 0;
-  digest->algo = ALGO_MD5; /* default algorithm */
+  digest->algo = ALGO_SHA256; /* default algorithm */
   digest->stale = FALSE; /* default means normal, not stale */
   digest->userhash = FALSE;
 }
