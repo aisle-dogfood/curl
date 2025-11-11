@@ -81,10 +81,10 @@ static void free_config_fields(struct OperationConfig *config)
 
   tool_safefree(config->userpwd);
   tool_safefree(config->tls_username);
-  tool_safefree(config->tls_password);
+  tool_secure_free(config->tls_password);
   tool_safefree(config->tls_authtype);
   tool_safefree(config->proxy_tls_username);
-  tool_safefree(config->proxy_tls_password);
+  tool_secure_free(config->proxy_tls_password);
   tool_safefree(config->proxy_tls_authtype);
   tool_safefree(config->proxyuserpwd);
   tool_safefree(config->proxy);
@@ -144,8 +144,8 @@ static void free_config_fields(struct OperationConfig *config)
   tool_safefree(config->proxy_key);
   tool_safefree(config->key_type);
   tool_safefree(config->proxy_key_type);
-  tool_safefree(config->key_passwd);
-  tool_safefree(config->proxy_key_passwd);
+  tool_secure_free(config->key_passwd);
+  tool_secure_free(config->proxy_key_passwd);
   tool_safefree(config->pubkey);
   tool_safefree(config->hostpubmd5);
   tool_safefree(config->hostpubsha256);

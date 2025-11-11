@@ -43,6 +43,26 @@
 #define ALLOW_BLANK TRUE
 #define DENY_BLANK FALSE
 
+/* Secure strdup for sensitive data like passphrases */
+static char *secure_strdup(const char *str)
+{
+  size_t len;
+  char *copy;
+  
+  if(!str)
+    return NULL;
+    
+  len = strlen(str);
+  copy = malloc(len + 1);
+  if(!copy)
+    return NULL;
+    
+  memcpy(copy, str, len + 1);
+  return copy;
+}
+
+
+
 static ParameterError getstr(char **str, const char *val, bool allowblank)
 {
   if(*str) {
@@ -54,6 +74,24 @@ static ParameterError getstr(char **str, const char *val, bool allowblank)
     return PARAM_BLANK_STRING;
 
   *str = strdup(val);
+  if(!*str)
+    return PARAM_NO_MEM;
+
+  return PARAM_OK;
+}
+
+/* Secure version of getstr for sensitive data like passwords */
+static ParameterError getstr_secure(char **str, const char *val, bool allowblank)
+{
+  if(*str) {
+    tool_secure_free(*str);
+    *str = NULL;
+  }
+  DEBUGASSERT(val);
+  if(!allowblank && !val[0])
+    return PARAM_BLANK_STRING;
+
+  *str = secure_strdup(val);
   if(!*str)
     return PARAM_NO_MEM;
 
@@ -469,7 +507,7 @@ void parse_cert_parameter(const char *cert_parameter,
        * above; if we are still here, this is a separating colon */
       param_place++;
       if(*param_place) {
-        *passphrase = strdup(param_place);
+        *passphrase = secure_strdup(param_place);
       }
       goto done;
     }
@@ -515,7 +553,8 @@ GetFileAndPassword(const char *nextarg, char **file, char **password)
   free(*file);
   *file = certname;
   if(passphrase) {
-    free(*password);
+    if(*password)
+      tool_secure_free(*password);
     *password = passphrase;
   }
 }
@@ -2536,7 +2575,7 @@ static ParameterError opt_filestring(struct OperationConfig *config,
     err = getstr(&config->key_type, nextarg, DENY_BLANK);
     break;
   case C_PASS: /* --pass */
-    err = getstr(&config->key_passwd, nextarg, DENY_BLANK);
+    err = getstr_secure(&config->key_passwd, nextarg, DENY_BLANK);
     break;
   case C_ENGINE: /* --engine */
     err = getstr(&config->engine, nextarg, DENY_BLANK);
@@ -2580,7 +2619,7 @@ static ParameterError opt_filestring(struct OperationConfig *config,
     if(!feature_tls_srp)
       err = PARAM_LIBCURL_DOESNT_SUPPORT;
     else
-      err = getstr(&config->tls_password, nextarg, ALLOW_BLANK);
+      err = getstr_secure(&config->tls_password, nextarg, ALLOW_BLANK);
     break;
   case C_TLSAUTHTYPE: /* --tlsauthtype */
     if(!feature_tls_srp)
@@ -2613,7 +2652,7 @@ static ParameterError opt_filestring(struct OperationConfig *config,
     if(!feature_tls_srp)
       err = PARAM_LIBCURL_DOESNT_SUPPORT;
     else
-      err = getstr(&config->proxy_tls_password, nextarg, DENY_BLANK);
+      err = getstr_secure(&config->proxy_tls_password, nextarg, DENY_BLANK);
     break;
   case C_PROXY_TLSAUTHTYPE: /* --proxy-tlsauthtype */
     if(!feature_tls_srp)
@@ -2639,7 +2678,7 @@ static ParameterError opt_filestring(struct OperationConfig *config,
     err = getstr(&config->proxy_key_type, nextarg, DENY_BLANK);
     break;
   case C_PROXY_PASS: /* --proxy-pass */
-    err = getstr(&config->proxy_key_passwd, nextarg, ALLOW_BLANK);
+    err = getstr_secure(&config->proxy_key_passwd, nextarg, ALLOW_BLANK);
     break;
   case C_PROXY_CIPHERS: /* --proxy-ciphers */
     err = getstr(&config->proxy_cipher_list, nextarg, DENY_BLANK);
