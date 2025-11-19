@@ -163,15 +163,43 @@ percent_decode()
     done
 }
 
+# Sanitize a filename to prevent path traversal attacks.
+# Removes path separators, directory traversal sequences, and other dangerous characters.
+sanitize_filename()
+{
+    filename="${1}"
+    
+    # Remove any path separators (/ and \)
+    filename="$(printf %s "${filename}" | tr -d '/\\')"
+    
+    # Remove directory traversal sequences specifically
+    # Remove ".." sequences and leading dots, but preserve single dots in extensions
+    filename="$(printf %s "${filename}" | sed -e 's/\.\.\+//g' -e 's/^\.*//')"
+    
+    # If the filename is empty or consists only of dots/whitespace after sanitization,
+    # return a safe default
+    case "${filename}" in
+        *[!\ \.]*) ;;  # Contains non-dot, non-space characters - keep it
+        *) filename="sanitized_file" ;;  # Empty or only dots/spaces - use default
+    esac
+    
+    # Ensure we have a non-empty filename
+    if [ -z "${filename}" ]; then
+        filename="sanitized_file"
+    fi
+    
+    printf %s "${filename}"
+}
+
 # Print the percent-decoded filename portion of the given URL.
 get_url_filename()
 {
     # Remove protocol and query string if present.
     hostname_and_path="$(printf %s "${1}" | sed -e 's,^[^/]*//,,' -e 's,?.*$,,')"
-    # If what remains contains a slash, there's a path; return it percent-decoded.
+    # If what remains contains a slash, there's a path; return it percent-decoded and sanitized.
     case "${hostname_and_path}" in
         # sed to remove everything preceding the last '/', e.g.: "example/something" becomes "something"
-        */*) percent_decode "$(printf %s "${hostname_and_path}" | sed -e 's,^.*/,,')";;
+        */*) sanitize_filename "$(percent_decode "$(printf %s "${hostname_and_path}" | sed -e 's,^.*/,,')")";;
     esac
     # No slash means there was just a hostname and no path; return empty string.
 }
