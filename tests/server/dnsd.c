@@ -384,6 +384,7 @@ static int test_dnsd(int argc, char **argv)
   int rc;
   int error;
   int result = 0;
+  const char *addr = NULL;
 
   pidname = ".dnsd.pid";
   serverlogfile = "log/dnsd.log";
@@ -447,6 +448,14 @@ static int test_dnsd(int argc, char **argv)
         arg++;
       }
     }
+    else if(!strcmp("--addr", argv[arg])) {
+      /* Set an IP address to bind to; otherwise use loopback */
+      arg++;
+      if(argc > arg) {
+        addr = argv[arg];
+        arg++;
+      }
+    }
     else {
       if(argv[arg])
         fprintf(stderr, "unknown option: %s\n", argv[arg]);
@@ -458,7 +467,8 @@ static int test_dnsd(int argc, char **argv)
            " --portfile [file]\n"
            " --ipv4\n"
            " --ipv6\n"
-           " --port [port]\n");
+           " --port [port]\n"
+           " --addr [address]\n");
       return 0;
     }
   }
@@ -502,7 +512,13 @@ static int test_dnsd(int argc, char **argv)
 #endif
     memset(&me.sa4, 0, sizeof(me.sa4));
     me.sa4.sin_family = AF_INET;
-    me.sa4.sin_addr.s_addr = INADDR_ANY;
+    if(!addr)
+      addr = "127.0.0.1";
+    if(curlx_inet_pton(AF_INET, addr, &me.sa4.sin_addr) != 1) {
+      logmsg("Error: invalid IPv4 address '%s'", addr);
+      result = 1;
+      goto dnsd_cleanup;
+    }
     me.sa4.sin_port = htons(port);
     rc = bind(sock, &me.sa, sizeof(me.sa4));
 #ifdef USE_IPV6
@@ -510,7 +526,13 @@ static int test_dnsd(int argc, char **argv)
   else {
     memset(&me.sa6, 0, sizeof(me.sa6));
     me.sa6.sin6_family = AF_INET6;
-    me.sa6.sin6_addr = in6addr_any;
+    if(!addr)
+      addr = "::1";
+    if(curlx_inet_pton(AF_INET6, addr, &me.sa6.sin6_addr) != 1) {
+      logmsg("Error: invalid IPv6 address '%s'", addr);
+      result = 1;
+      goto dnsd_cleanup;
+    }
     me.sa6.sin6_port = htons(port);
     rc = bind(sock, &me.sa, sizeof(me.sa6));
   }
