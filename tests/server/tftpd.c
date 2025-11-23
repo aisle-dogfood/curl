@@ -552,6 +552,7 @@ static int test_tftpd(int argc, char **argv)
   int result = 0;
   srvr_sockaddr_union_t from;
   curl_socklen_t fromlen;
+  const char *addr = NULL;
 
   memset(&test, 0, sizeof(test));
 
@@ -620,6 +621,14 @@ static int test_tftpd(int argc, char **argv)
         arg++;
       }
     }
+    else if(!strcmp("--addr", argv[arg])) {
+      /* Set an IP address to bind to; otherwise use loopback */
+      arg++;
+      if(argc > arg) {
+        addr = argv[arg];
+        arg++;
+      }
+    }
     else {
       puts("Usage: tftpd [option]\n"
            " --version\n"
@@ -630,7 +639,8 @@ static int test_tftpd(int argc, char **argv)
            " --ipv4\n"
            " --ipv6\n"
            " --port [port]\n"
-           " --srcdir [path]");
+           " --srcdir [path]\n"
+           " --addr [address]");
       return 0;
     }
   }
@@ -676,7 +686,13 @@ static int test_tftpd(int argc, char **argv)
 #endif
     memset(&me.sa4, 0, sizeof(me.sa4));
     me.sa4.sin_family = AF_INET;
-    me.sa4.sin_addr.s_addr = INADDR_ANY;
+    if(!addr)
+      addr = "127.0.0.1";
+    if(curlx_inet_pton(AF_INET, addr, &me.sa4.sin_addr) != 1) {
+      logmsg("Error: invalid IPv4 address '%s'", addr);
+      result = 1;
+      goto tftpd_cleanup;
+    }
     me.sa4.sin_port = htons(port);
     rc = bind(sock, &me.sa, sizeof(me.sa4));
 #ifdef USE_IPV6
@@ -684,7 +700,13 @@ static int test_tftpd(int argc, char **argv)
   else {
     memset(&me.sa6, 0, sizeof(me.sa6));
     me.sa6.sin6_family = AF_INET6;
-    me.sa6.sin6_addr = in6addr_any;
+    if(!addr)
+      addr = "::1";
+    if(curlx_inet_pton(AF_INET6, addr, &me.sa6.sin6_addr) != 1) {
+      logmsg("Error: invalid IPv6 address '%s'", addr);
+      result = 1;
+      goto tftpd_cleanup;
+    }
     me.sa6.sin6_port = htons(port);
     rc = bind(sock, &me.sa, sizeof(me.sa6));
   }
