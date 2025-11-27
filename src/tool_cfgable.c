@@ -79,14 +79,14 @@ static void free_config_fields(struct OperationConfig *config)
 
   tool_safefree(config->range);
 
-  tool_safefree(config->userpwd);
+  tool_seccurefree(config->userpwd);
   tool_safefree(config->tls_username);
-  tool_safefree(config->tls_password);
+  tool_seccurefree(config->tls_password);
   tool_safefree(config->tls_authtype);
   tool_safefree(config->proxy_tls_username);
-  tool_safefree(config->proxy_tls_password);
+  tool_seccurefree(config->proxy_tls_password);
   tool_safefree(config->proxy_tls_authtype);
-  tool_safefree(config->proxyuserpwd);
+  tool_seccurefree(config->proxyuserpwd);
   tool_safefree(config->proxy);
 
   tool_safefree(config->dns_ipv6_addr);
@@ -98,7 +98,7 @@ static void free_config_fields(struct OperationConfig *config)
 
   tool_safefree(config->mail_from);
   curl_slist_free_all(config->mail_rcpt);
-  tool_safefree(config->mail_auth);
+  tool_seccurefree(config->mail_auth);
 
   tool_safefree(config->netrc_file);
   tool_safefree(config->output_dir);
@@ -132,7 +132,7 @@ static void free_config_fields(struct OperationConfig *config)
   tool_safefree(config->cert_type);
   tool_safefree(config->proxy_cert_type);
   tool_safefree(config->cacert);
-  tool_safefree(config->login_options);
+  tool_seccurefree(config->login_options);
   tool_safefree(config->proxy_cacert);
   tool_safefree(config->capath);
   tool_safefree(config->proxy_capath);
@@ -144,8 +144,8 @@ static void free_config_fields(struct OperationConfig *config)
   tool_safefree(config->proxy_key);
   tool_safefree(config->key_type);
   tool_safefree(config->proxy_key_type);
-  tool_safefree(config->key_passwd);
-  tool_safefree(config->proxy_key_passwd);
+  tool_seccurefree(config->key_passwd);
+  tool_seccurefree(config->proxy_key_passwd);
   tool_safefree(config->pubkey);
   tool_safefree(config->hostpubmd5);
   tool_safefree(config->hostpubsha256);
@@ -156,7 +156,7 @@ static void free_config_fields(struct OperationConfig *config)
   tool_safefree(config->request_target);
   tool_safefree(config->customrequest);
   tool_safefree(config->krblevel);
-  tool_safefree(config->oauth_bearer);
+  tool_seccurefree(config->oauth_bearer);
   tool_safefree(config->sasl_authzid);
   tool_safefree(config->unix_socket_path);
   tool_safefree(config->writeout);
@@ -182,9 +182,9 @@ static void free_config_fields(struct OperationConfig *config)
   tool_safefree(config->preproxy);
   tool_safefree(config->proxy_service_name);
   tool_safefree(config->service_name);
-  tool_safefree(config->ftp_account);
+  tool_seccurefree(config->ftp_account);
   tool_safefree(config->ftp_alternative_to_user);
-  tool_safefree(config->aws_sigv4);
+  tool_seccurefree(config->aws_sigv4);
   tool_safefree(config->proto_str);
   tool_safefree(config->proto_redir_str);
   tool_safefree(config->ech);

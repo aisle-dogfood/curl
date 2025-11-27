@@ -29,6 +29,7 @@
 #include "tool_sdecls.h"
 #include "tool_urlglob.h"
 #include "var.h"
+#include <string.h> /* for memset and strlen in tool_seccurefree */
 
 /* the type we use for storing a single boolean bit */
 #ifndef BIT
@@ -61,6 +62,16 @@
 
 #define tool_safefree(ptr)                      \
   do { free((ptr)); (ptr) = NULL;} while(0)
+
+/* Securely wipe sensitive data before freeing */
+#define tool_seccurefree(ptr)                   \
+  do {                                          \
+    if((ptr)) {                                 \
+      memset((ptr), 0, strlen((ptr)));          \
+      free((ptr));                              \
+      (ptr) = NULL;                             \
+    }                                           \
+  } while(0)
 
 extern struct GlobalConfig *global;
 
