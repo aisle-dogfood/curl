@@ -565,7 +565,7 @@ CURLFORMcode FormAdd(struct curl_httppost **httppost,
       if(curr->contenttype) {
         if(curr->flags & HTTPPOST_FILENAME) {
           if(avalue) {
-            char *type = strdup(avalue);
+            char *type = Curl_memdup0(avalue, strlen(avalue));
             if(!type)
               retval = CURL_FORMADD_MEMORY;
             else {
@@ -589,7 +589,7 @@ CURLFORMcode FormAdd(struct curl_httppost **httppost,
       }
       else {
         if(avalue) {
-          curr->contenttype = strdup(avalue);
+          curr->contenttype = Curl_memdup0(avalue, strlen(avalue));
           if(!curr->contenttype)
             retval = CURL_FORMADD_MEMORY;
           else
