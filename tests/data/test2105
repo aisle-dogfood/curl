@@ -1,0 +1,35 @@
+<testcase>
+<info>
+<keywords>
+GOPHER
+SELECTOR
+SECURITY
+FAILURE
+</keywords>
+</info>
+
+# Server-side
+<reply>
+</reply>
+
+# Client-side
+<client>
+<server>
+gopher
+</server>
+<name>
+Gopher selector with CR/LF injection attempt
+</name>
+<command>
+gopher://%HOSTIP:%GOPHERPORT/1/selector%0d%0ainjected/%TESTNUMBER
+</command>
+</client>
+
+# Verify data after the test has been "shot"
+<verify>
+# 3 == CURLE_URL_MALFORMAT
+<errorcode>
+3
+</errorcode>
+</verify>
+</testcase>
