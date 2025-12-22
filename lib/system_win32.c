@@ -231,8 +231,18 @@ static HMODULE curl_load_library(LPCTSTR filename)
       TCHAR *path = malloc(sizeof(TCHAR) * (systemdirlen + 1 + filenamelen));
       if(path && GetSystemDirectory(path, systemdirlen)) {
         /* Calculate the full DLL path */
-        _tcscpy(path + _tcslen(path), TEXT("\\"));
-        _tcscpy(path + _tcslen(path), filename);
+        size_t pathlen = _tcslen(path);
+        size_t remaining = systemdirlen + filenamelen - pathlen;
+
+        /* Safely append backslash and filename */
+        if(remaining >= 1 + filenamelen) {
+          path[pathlen] = TEXT('\\');
+          path[pathlen + 1] = TEXT('\0');
+          /* Use memcpy for safe copy with known bounds */
+          memcpy(path + pathlen + 1, filename,
+                 filenamelen * sizeof(TCHAR));
+          path[pathlen + 1 + filenamelen] = TEXT('\0');
+        }
 
         /* Load the DLL from the Windows system directory */
         /** !checksrc! disable BANNEDFUNC 1 **/
