@@ -120,9 +120,9 @@ size_t tool_read_cb(char *buffer, size_t sz, size_t nmemb, void *userdata)
     }
   }
   if((per->uploadfilesize != -1) &&
-     (per->uploadedsofar + rc > per->uploadfilesize)) {
+     (rc > per->uploadfilesize - per->uploadedsofar)) {
     /* do not allow uploading more than originally set out to do */
-    curl_off_t delta = per->uploadedsofar + rc - per->uploadfilesize;
+    curl_off_t delta = rc - (per->uploadfilesize - per->uploadedsofar);
     warnf("File size larger in the end than when "
           "started. Dropping at least %" CURL_FORMAT_CURL_OFF_T " bytes",
           delta);
