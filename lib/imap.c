@@ -611,9 +611,16 @@ static CURLcode imap_perform_login(struct Curl_easy *data,
   user = imap_atom(conn->user, FALSE);
   passwd = imap_atom(conn->passwd, FALSE);
 
+  /* Check for control characters or allocation failure */
+  if(!user || !passwd) {
+    free(user);
+    free(passwd);
+    failf(data, "Invalid characters in username or password");
+    return CURLE_LOGIN_DENIED;
+  }
+
   /* Send the LOGIN command */
-  result = imap_sendf(data, imapc, "LOGIN %s %s", user ? user : "",
-                      passwd ? passwd : "");
+  result = imap_sendf(data, imapc, "LOGIN %s %s", user, passwd);
 
   free(user);
   free(passwd);
@@ -1983,11 +1990,22 @@ static char *imap_atom(const char *str, bool escape_only)
   struct dynbuf line;
   size_t nclean;
   size_t len;
+  const char *p;
 
   if(!str)
     return NULL;
 
   len = strlen(str);
+
+  /* Check for control characters (RFC 3501) - reject CR, LF and other
+     control characters that could be used for command injection */
+  for(p = str; *p; p++) {
+    if(ISCNTRL((unsigned char)*p)) {
+      /* Control character detected - unsafe for IMAP quoted strings */
+      return NULL;
+    }
+  }
+
   nclean = strcspn(str, "() {%*]\\\"");
   if(len == nclean)
     /* nothing to escape, return a strdup */
