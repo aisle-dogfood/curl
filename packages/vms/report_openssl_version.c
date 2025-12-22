@@ -45,10 +45,44 @@ int main(int argc, char **argv)
   void *libptr;
   const char * (*ssl_version)(int t);
   const char *version;
+  size_t path_len;
+  size_t i;
 
-  if(argc < 1) {
+  if(argc < 2) {
     puts("report_openssl_version filename");
     return 1;
+  }
+
+  /* Validate the library path to prevent command injection */
+  if(!argv[1]) {
+    puts("Invalid library path");
+    return 1;
+  }
+
+  path_len = strlen(argv[1]);
+  
+  /* Check for reasonable path length */
+  if(path_len == 0 || path_len > 4096) {
+    puts("Invalid library path length");
+    return 1;
+  }
+
+  /* Check for null bytes and dangerous characters in the path */
+  for(i = 0; i < path_len; i++) {
+    unsigned char c = (unsigned char)argv[1][i];
+    /* Reject control characters (except tab) and other suspicious characters */
+    if(c < 32 && c != 9) {
+      puts("Invalid characters in library path");
+      return 1;
+    }
+    /* Reject characters that could be used for command injection */
+    if(c == ';' || c == '|' || c == '&' || c == '`' || 
+       c == '$' || c == '(' || c == ')' || c == '<' || 
+       c == '>' || c == '\'' || c == '"' || c == '\\' ||
+       c == '\n' || c == '\r') {
+      puts("Forbidden characters in library path");
+      return 1;
+    }
   }
 
   libptr = dlopen(argv[1], 0);
