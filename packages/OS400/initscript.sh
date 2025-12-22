@@ -144,12 +144,11 @@ canonicalize_path()
         fi
 
         R=
-        IFSSAVE="${IFS}"
-        IFS="/"
-
-        for C in ${P}
-        do      IFS="${IFSSAVE}"
-                case "${C}" in
+        
+        # Use while-read with here-document to avoid global IFS modification
+        # Split path by '/' and process each component
+        while IFS= read -r C
+        do      case "${C}" in
                 .)      ;;
                 ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
                         ;;
@@ -157,9 +156,10 @@ canonicalize_path()
                         ;;
                 *)      ;;
                 esac
-        done
+        done << EOF
+$(echo "${P}" | tr '/' '\n')
+EOF
 
-        IFS="${IFSSAVE}"
         echo "/$(expr "${R}" : '^\(.*\)/')"
 }
 
