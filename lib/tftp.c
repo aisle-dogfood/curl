@@ -322,8 +322,15 @@ static CURLcode tftp_parse_option_ack(struct tftp_conn *state,
 
   while(tmp < ptr + len) {
     const char *option, *value;
+    ptrdiff_t remaining;
 
-    tmp = tftp_option_get(tmp, ptr + len - tmp, &option, &value);
+    remaining = (ptr + len) - tmp;
+    if(remaining < 0 || remaining > (ptrdiff_t)SIZE_MAX) {
+      failf(data, "Malformed ACK packet, rejecting");
+      return CURLE_TFTP_ILLEGAL;
+    }
+
+    tmp = tftp_option_get(tmp, (size_t)remaining, &option, &value);
     if(!tmp) {
       failf(data, "Malformed ACK packet, rejecting");
       return CURLE_TFTP_ILLEGAL;
