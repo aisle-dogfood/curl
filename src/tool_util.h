@@ -34,6 +34,13 @@ struct timeval tvrealnow(void);
 int struplocompare(const char *p1, const char *p2);
 int struplocompare4sort(const void *p1, const void *p2);
 
+/* Secure file opening with restrictive permissions.
+ * Opens a file with mode 0600 on POSIX systems to ensure only the owner
+ * can read/write. This is important for files that may contain sensitive
+ * data such as trace dumps with headers and payloads.
+ */
+FILE *tool_fopen_secure(const char *filename, const char *mode);
+
 #if defined(_WIN32) && !defined(UNDER_CE)
 FILE *tool_execpath(const char *filename, char **pathp);
 #endif
