@@ -179,6 +179,18 @@ static CURLcode gopher_do(struct Curl_easy *data, bool *done)
     if(result)
       return result;
     sel_org = sel;
+
+    /* Reject CR/LF in the selector to prevent injection attacks */
+    {
+      size_t i;
+      for(i = 0; i < len; i++) {
+        if((sel[i] == '\r') || (sel[i] == '\n')) {
+          free(sel_org);
+          failf(data, "CR/LF characters in Gopher selector");
+          return CURLE_URL_MALFORMAT;
+        }
+      }
+    }
   }
 
   k = curlx_uztosz(len);
