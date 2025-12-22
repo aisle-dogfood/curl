@@ -23,6 +23,16 @@
  ***************************************************************************/
 #include "tool_setup.h"
 
+#ifdef HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+#ifdef HAVE_IO_H
+#include <io.h>
+#endif
+
 #include "tool_util.h"
 #include "memdebug.h" /* keep this as LAST include */
 
@@ -77,6 +87,59 @@ int struplocompare(const char *p1, const char *p2)
 int struplocompare4sort(const void *p1, const void *p2)
 {
   return struplocompare(* (char * const *) p1, * (char * const *) p2);
+}
+
+/*
+ * Open a file with restrictive permissions for writing sensitive data.
+ * On POSIX systems, creates the file with mode 0600 (owner read/write only).
+ * On Windows, uses default permissions (could be enhanced with ACLs).
+ * Returns FILE pointer on success, NULL on failure.
+ */
+FILE *tool_fopen_secure(const char *filename, const char *mode)
+{
+#if defined(_WIN32)
+  /* On Windows, use _sopen_s with restricted sharing mode if available */
+#if defined(_MSC_VER) && (_MSC_VER >= 1400)
+  /* Use secure file opening on Windows with MSVC 2005+ */
+  int fd;
+  FILE *fp = NULL;
+
+  /* _SH_DENYRW denies read and write sharing, but this doesn't restrict
+   * other users on multi-user systems. For better security on Windows,
+   * we would need to set explicit ACLs, but that's complex.
+   * For now, we at least prevent other processes from opening the file
+   * while we have it open.
+   */
+  if(_sopen_s(&fd, filename, _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY,
+              _SH_DENYRW, _S_IREAD | _S_IWRITE) == 0) {
+    fp = _fdopen(fd, mode);
+    if(!fp)
+      _close(fd);
+  }
+  return fp;
+#else
+  /* Fallback for older Windows compilers or non-MSVC */
+  return fopen(filename, mode);
+#endif
+#else
+  /* POSIX: use open() with restrictive mode, then fdopen() */
+  int fd;
+  FILE *fp = NULL;
+  int flags = O_WRONLY | O_CREAT | O_TRUNC;
+
+#ifdef O_CLOEXEC
+  flags |= O_CLOEXEC;
+#endif
+
+  /* Create with mode 0600 - only owner can read/write */
+  fd = open(filename, flags, S_IRUSR | S_IWUSR);
+  if(fd != -1) {
+    fp = fdopen(fd, mode);
+    if(!fp)
+      close(fd);
+  }
+  return fp;
+#endif
 }
 
 #ifdef USE_TOOL_FTRUNCATE
