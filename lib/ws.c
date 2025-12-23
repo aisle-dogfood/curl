@@ -41,6 +41,21 @@
 #include "select.h"
 #include "curlx/nonblock.h"
 #include "curlx/strparse.h"
+#include "headers.h"
+
+#ifdef USE_OPENSSL
+#include <openssl/evp.h>
+#include <openssl/sha.h>
+#elif defined(USE_GNUTLS)
+#include <nettle/sha1.h>
+#elif defined(USE_MBEDTLS)
+#include <mbedtls/version.h>
+#include <mbedtls/sha1.h>
+#elif defined(AN_APPLE_OS)
+#include <CommonCrypto/CommonDigest.h>
+#elif defined(USE_WIN32_CRYPTO)
+#include <wincrypt.h>
+#endif
 
 /* The last 3 #include files should be in this order */
 #include "curl_printf.h"
@@ -128,6 +143,7 @@ struct websocket {
   struct curl_ws_frame recvframe;  /* the current WS FRAME received */
   struct ws_cntrl_frame pending; /* a control frame pending to be sent */
   size_t sendbuf_payload; /* number of payload bytes in sendbuf */
+  char ws_key[40]; /* Sec-WebSocket-Key sent in the request */
 };
 
 
@@ -1214,6 +1230,138 @@ struct wsfield {
   const char *val;
 };
 
+/* Forward declaration */
+static void ws_conn_dtor(void *key, size_t klen, void *entry);
+
+/* Compute the expected Sec-WebSocket-Accept value */
+static CURLcode ws_compute_accept(const char *key, char **accept_out)
+{
+  CURLcode result = CURLE_FAILED_INIT;
+
+#if defined(USE_OPENSSL) || defined(USE_GNUTLS) || defined(USE_MBEDTLS) || \
+    defined(AN_APPLE_OS) || defined(USE_WIN32_CRYPTO)
+  char *accept = NULL;
+  size_t accept_len = 0;
+  /* RFC 6455: The value is the base64-encoded SHA-1 hash of the
+   * Sec-WebSocket-Key concatenated with the GUID */
+  #define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+  char input[128];
+  unsigned char sha1_hash[20]; /* SHA-1 produces 20 bytes */
+
+  /* Concatenate key + GUID */
+  if(strlen(key) + strlen(WS_GUID) >= sizeof(input))
+    return CURLE_FAILED_INIT;
+
+  msnprintf(input, sizeof(input), "%s%s", key, WS_GUID);
+
+#ifdef USE_OPENSSL
+  {
+    EVP_MD_CTX *ctx = NULL;
+    unsigned int hash_len = 0;
+
+    /* Compute SHA-1 hash using OpenSSL */
+    ctx = EVP_MD_CTX_create();
+    if(!ctx)
+      return CURLE_OUT_OF_MEMORY;
+
+    if(EVP_DigestInit_ex(ctx, EVP_sha1(), NULL) &&
+       EVP_DigestUpdate(ctx, input, strlen(input)) &&
+       EVP_DigestFinal_ex(ctx, sha1_hash, &hash_len)) {
+      /* Base64 encode the hash */
+      result = curlx_base64_encode((char *)sha1_hash, 20,
+                                   &accept, &accept_len);
+      if(!result)
+        *accept_out = accept;
+    }
+
+    EVP_MD_CTX_destroy(ctx);
+  }
+#elif defined(USE_GNUTLS)
+  {
+    struct sha1_ctx ctx;
+    sha1_init(&ctx);
+    sha1_update(&ctx, strlen(input), (const uint8_t *)input);
+    sha1_digest(&ctx, 20, sha1_hash);
+
+    /* Base64 encode the hash */
+    result = curlx_base64_encode((char *)sha1_hash, 20,
+                                 &accept, &accept_len);
+    if(!result)
+      *accept_out = accept;
+  }
+#elif defined(USE_MBEDTLS)
+  {
+    mbedtls_sha1_context ctx;
+    const unsigned char *input_ptr = (const unsigned char *)input;
+    mbedtls_sha1_init(&ctx);
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+    /* mbedTLS 3.x API */
+    if(mbedtls_sha1_starts(&ctx) == 0 &&
+       mbedtls_sha1_update(&ctx, input_ptr, strlen(input)) == 0 &&
+       mbedtls_sha1_finish(&ctx, sha1_hash) == 0) {
+#else
+    /* mbedTLS 2.x API */
+    if(mbedtls_sha1_starts_ret(&ctx) == 0 &&
+       mbedtls_sha1_update_ret(&ctx, input_ptr, strlen(input)) == 0 &&
+       mbedtls_sha1_finish_ret(&ctx, sha1_hash) == 0) {
+#endif
+      /* Base64 encode the hash */
+      result = curlx_base64_encode((char *)sha1_hash, 20,
+                                   &accept, &accept_len);
+      if(!result)
+        *accept_out = accept;
+    }
+    mbedtls_sha1_free(&ctx);
+  }
+#elif defined(AN_APPLE_OS)
+  {
+    CC_SHA1((const unsigned char *)input, (CC_LONG)strlen(input),
+            sha1_hash);
+
+    /* Base64 encode the hash */
+    result = curlx_base64_encode((char *)sha1_hash, 20,
+                                 &accept, &accept_len);
+    if(!result)
+      *accept_out = accept;
+  }
+#elif defined(USE_WIN32_CRYPTO)
+  {
+    HCRYPTPROV hCryptProv = 0;
+    HCRYPTHASH hHash = 0;
+    DWORD hash_len = 20;
+
+    if(CryptAcquireContext(&hCryptProv, NULL, NULL, PROV_RSA_FULL,
+                           CRYPT_VERIFYCONTEXT)) {
+      if(CryptCreateHash(hCryptProv, CALG_SHA1, 0, 0, &hHash)) {
+        if(CryptHashData(hHash, (const BYTE *)input,
+                         (DWORD)strlen(input), 0)) {
+          if(CryptGetHashParam(hHash, HP_HASHVAL, sha1_hash,
+                               &hash_len, 0)) {
+            /* Base64 encode the hash */
+            result = curlx_base64_encode((char *)sha1_hash, 20,
+                                         &accept, &accept_len);
+            if(!result)
+              *accept_out = accept;
+          }
+        }
+        CryptDestroyHash(hHash);
+      }
+      CryptReleaseContext(hCryptProv, 0);
+    }
+  }
+#endif
+
+  #undef WS_GUID
+#else
+  /* Without crypto library, we cannot verify. */
+  (void)key;
+  (void)accept_out;
+  result = CURLE_NOT_BUILT_IN;
+#endif
+
+  return result;
+}
+
 CURLcode Curl_ws_request(struct Curl_easy *data, struct dynbuf *req)
 {
   unsigned int i;
@@ -1223,6 +1371,7 @@ CURLcode Curl_ws_request(struct Curl_easy *data, struct dynbuf *req)
   size_t randlen;
   char keyval[40];
   struct SingleRequest *k = &data->req;
+  struct websocket *ws;
   struct wsfield heads[]= {
     {
       /* The request MUST contain an |Upgrade| header field whose value
@@ -1246,6 +1395,41 @@ CURLcode Curl_ws_request(struct Curl_easy *data, struct dynbuf *req)
   };
   heads[2].val = &keyval[0];
 
+  /* Ensure websocket structure exists to store the key */
+  DEBUGASSERT(data->conn);
+  ws = Curl_conn_meta_get(data->conn, CURL_META_PROTO_WS_CONN);
+  if(!ws) {
+    size_t chunk_size = WS_CHUNK_SIZE;
+    ws = calloc(1, sizeof(*ws));
+    if(!ws)
+      return CURLE_OUT_OF_MEMORY;
+#ifdef DEBUGBUILD
+    {
+      const char *p = getenv("CURL_WS_CHUNK_SIZE");
+      if(p) {
+        curl_off_t l;
+        if(!curlx_str_number(&p, &l, 1*1024*1024))
+          chunk_size = (size_t)l;
+      }
+    }
+#endif
+    CURL_TRC_WS(data, "WS, using chunk size %zu", chunk_size);
+    Curl_bufq_init2(&ws->recvbuf, chunk_size, WS_CHUNK_COUNT,
+                    BUFQ_OPT_SOFT_LIMIT);
+    Curl_bufq_init2(&ws->sendbuf, chunk_size, WS_CHUNK_COUNT,
+                    BUFQ_OPT_SOFT_LIMIT);
+    ws_dec_init(&ws->dec);
+    ws_enc_init(&ws->enc);
+    result = Curl_conn_meta_set(data->conn, CURL_META_PROTO_WS_CONN,
+                                ws, ws_conn_dtor);
+    if(result) {
+      Curl_bufq_free(&ws->recvbuf);
+      Curl_bufq_free(&ws->sendbuf);
+      free(ws);
+      return result;
+    }
+  }
+
   /* 16 bytes random */
   result = Curl_rand(data, (unsigned char *)rand, sizeof(rand));
   if(result)
@@ -1259,6 +1443,11 @@ CURLcode Curl_ws_request(struct Curl_easy *data, struct dynbuf *req)
     return CURLE_FAILED_INIT;
   }
   strcpy(keyval, randstr);
+
+  /* Store the key in the websocket structure for later verification */
+  DEBUGASSERT(randlen < sizeof(ws->ws_key));
+  strcpy(ws->ws_key, randstr);
+
   free(randstr);
   for(i = 0; !result && (i < CURL_ARRAYSIZE(heads)); i++) {
     if(!Curl_checkheaders(data, heads[i].name, strlen(heads[i].name))) {
@@ -1334,6 +1523,58 @@ CURLcode Curl_ws_accept(struct Curl_easy *data,
      |Sec-WebSocket-Key| header field concatenated with
      the string "258EAFA5-E914-47DA-95CA-C5AB0DC85B11".
   */
+#if !defined(CURL_DISABLE_HEADERS_API)
+  if(ws->ws_key[0]) {
+    /* Only verify if we have a stored key */
+    struct curl_header *header;
+    char *expected_accept = NULL;
+    CURLHcode hresult;
+
+    /* First check if we can verify (crypto backend available) */
+    result = ws_compute_accept(ws->ws_key, &expected_accept);
+    if(result == CURLE_NOT_BUILT_IN) {
+      /* SHA-1 not available, skip verification but warn */
+      infof(data, "[WS] Warning: Cannot verify Sec-WebSocket-Accept "
+            "(SHA-1 not available)");
+      result = CURLE_OK;
+    }
+    else if(result) {
+      failf(data, "Failed to compute expected Sec-WebSocket-Accept");
+      goto out;
+    }
+    else {
+      /* Crypto available, get and verify the header */
+      hresult = curl_easy_header(data, "Sec-WebSocket-Accept", 0,
+                                 CURLH_HEADER, -1, &header);
+      if(hresult != CURLHE_OK) {
+        failf(data, "Missing Sec-WebSocket-Accept header in response");
+        free(expected_accept);
+        result = CURLE_HTTP_RETURNED_ERROR;
+        goto out;
+      }
+
+      /* Compare expected vs actual */
+      if(strcmp(header->value, expected_accept) != 0) {
+        failf(data, "Sec-WebSocket-Accept mismatch: expected '%s', got '%s'",
+              expected_accept, header->value);
+        free(expected_accept);
+        result = CURLE_HTTP_RETURNED_ERROR;
+        goto out;
+      }
+      free(expected_accept);
+      infof(data, "[WS] Sec-WebSocket-Accept verified successfully");
+    }
+  }
+  else {
+    /* No key stored, cannot verify */
+    infof(data, "[WS] Warning: Cannot verify Sec-WebSocket-Accept "
+          "(no key stored)");
+  }
+#else
+  /* Without headers API, we cannot verify. Warn the user. */
+  infof(data, "[WS] Warning: Cannot verify Sec-WebSocket-Accept "
+        "(headers API disabled)");
+#endif
 
   /* If the response includes a |Sec-WebSocket-Extensions| header field and
      this header field indicates the use of an extension that was not present
