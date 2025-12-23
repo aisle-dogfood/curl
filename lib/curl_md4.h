@@ -29,8 +29,36 @@
 
 #ifdef USE_CURL_NTLM_CORE
 
+/*
+ * SECURITY WARNING: MD4 is a cryptographically broken hash algorithm that
+ * provides insufficient computational effort for secure password hashing.
+ * MD4 should not be used for new applications.
+ *
+ * This implementation exists solely for NTLM authentication protocol
+ * compatibility, as the NTLM specification mandates the use of MD4.
+ *
+ * Applications should migrate away from NTLM to more secure authentication
+ * methods such as Kerberos, OAuth, or other modern mechanisms.
+ */
+
 #define MD4_DIGEST_LENGTH 16
 
+/*
+ * Curl_md4it() - Compute MD4 hash (INSECURE - for NTLM compatibility only)
+ *
+ * This function computes the MD4 hash of input data. MD4 is cryptographically
+ * broken and should only be used for NTLM protocol compatibility.
+ *
+ * Parameters:
+ *   output - Buffer to store the 16-byte MD4 hash (must be at least
+ *            MD4_DIGEST_LENGTH bytes)
+ *   input  - Input data to hash
+ *   len    - Length of input data in bytes
+ *
+ * Returns:
+ *   CURLE_OK on success
+ *   CURLE_FAILED_INIT if MD4 initialization fails
+ */
 CURLcode Curl_md4it(unsigned char *output, const unsigned char *input,
                     const size_t len);
 

@@ -22,9 +22,38 @@
  *
  ***************************************************************************/
 
+/*
+ * SECURITY WARNING: This file implements the MD4 hash algorithm which is
+ * cryptographically broken and provides insufficient computational effort
+ * for password hashing. MD4 is considered insecure and should not be used
+ * for new applications.
+ *
+ * This implementation exists solely for NTLM authentication protocol
+ * compatibility. The NTLM protocol specification mandates the use of MD4,
+ * making it impossible to replace with a stronger hash function without
+ * breaking protocol compatibility.
+ *
+ * Users are strongly encouraged to migrate away from NTLM authentication
+ * to more secure alternatives such as Kerberos, OAuth, or other modern
+ * authentication mechanisms. NTLM should only be used when absolutely
+ * necessary for compatibility with legacy systems.
+ *
+ * To disable NTLM support and remove MD4 from the build, configure curl
+ * with --disable-ntlm or set CURL_DISABLE_NTLM when building.
+ */
+
 #include "curl_setup.h"
 
 #ifdef USE_CURL_NTLM_CORE
+
+/* Emit a compile-time message about MD4 security implications */
+#if defined(__GNUC__) || defined(__clang__)
+#warning "Building with MD4 for NTLM. MD4 is weak. Disable with \
+--disable-ntlm"
+#elif defined(_MSC_VER)
+#pragma message("Building with MD4 for NTLM. MD4 is weak. Disable with \
+CURL_DISABLE_NTLM")
+#endif
 
 #include <string.h>
 
@@ -102,6 +131,9 @@
 #elif defined(AN_APPLE_OS)
 typedef CC_MD4_CTX MD4_CTX;
 
+/* SECURITY NOTE: MD4 is cryptographically broken and should not be used for
+ * password hashing. This function exists only for NTLM protocol compatibility.
+ * MD4 provides insufficient computational effort to resist modern attacks. */
 static int MD4_Init(MD4_CTX *ctx)
 {
   return CC_MD4_Init(ctx);
@@ -125,6 +157,9 @@ struct md4_ctx {
 };
 typedef struct md4_ctx MD4_CTX;
 
+/* SECURITY NOTE: MD4 is cryptographically broken and should not be used for
+ * password hashing. This function exists only for NTLM protocol compatibility.
+ * MD4 provides insufficient computational effort to resist modern attacks. */
 static int MD4_Init(MD4_CTX *ctx)
 {
   ctx->hCryptProv = 0;
@@ -172,6 +207,9 @@ static void MD4_Final(unsigned char *result, MD4_CTX *ctx)
 
 typedef struct md4_ctx MD4_CTX;
 
+/* SECURITY NOTE: MD4 is cryptographically broken and should not be used for
+ * password hashing. This function exists only for NTLM protocol compatibility.
+ * MD4 provides insufficient computational effort to resist modern attacks. */
 static int MD4_Init(MD4_CTX *ctx)
 {
   md4_init(ctx);
@@ -196,6 +234,9 @@ struct md4_ctx {
 };
 typedef struct md4_ctx MD4_CTX;
 
+/* SECURITY NOTE: MD4 is cryptographically broken and should not be used for
+ * password hashing. This function exists only for NTLM protocol compatibility.
+ * MD4 provides insufficient computational effort to resist modern attacks. */
 static int MD4_Init(MD4_CTX *ctx)
 {
   ctx->data = NULL;
@@ -412,6 +453,9 @@ static const void *my_md4_body(MD4_CTX *ctx,
   return ptr;
 }
 
+/* SECURITY NOTE: MD4 is cryptographically broken and should not be used for
+ * password hashing. This function exists only for NTLM protocol compatibility.
+ * MD4 provides insufficient computational effort to resist modern attacks. */
 static int MD4_Init(MD4_CTX *ctx)
 {
   ctx->a = 0x67452301;
@@ -512,6 +556,24 @@ static void MD4_Final(unsigned char *result, MD4_CTX *ctx)
 
 #endif /* CRYPTO LIBS */
 
+/*
+ * Curl_md4it()
+ *
+ * Computes the MD4 hash of the input data.
+ *
+ * SECURITY WARNING: MD4 is cryptographically broken and provides insufficient
+ * computational effort for secure password hashing. This function should only
+ * be used for NTLM authentication protocol compatibility. Do not use MD4 for
+ * new applications or security-sensitive operations.
+ *
+ * Parameters:
+ *
+ * output [out] - Buffer to store the 16-byte MD4 hash
+ * input [in]   - Input data to hash
+ * len [in]     - Length of input data
+ *
+ * Returns CURLE_OK on success, CURLE_FAILED_INIT on initialization failure.
+ */
 CURLcode Curl_md4it(unsigned char *output, const unsigned char *input,
                     const size_t len)
 {
