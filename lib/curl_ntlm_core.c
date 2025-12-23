@@ -391,6 +391,16 @@ static void ascii_uppercase_to_unicode_le(unsigned char *dest,
 
 /*
  * Set up nt hashed passwords
+ *
+ * SECURITY WARNING: This function uses MD4 for password hashing as required
+ * by the NTLM protocol specification. MD4 is cryptographically broken and
+ * provides insufficient computational effort to resist modern attacks.
+ *
+ * NTLM authentication should be considered insecure and is only provided
+ * for compatibility with legacy systems. Users should migrate to more
+ * secure authentication mechanisms such as Kerberos, OAuth, or other
+ * modern protocols.
+ *
  * @unittest: 1600
  */
 CURLcode Curl_ntlm_core_mk_nt_hash(const char *password,
@@ -407,7 +417,8 @@ CURLcode Curl_ntlm_core_mk_nt_hash(const char *password,
 
   ascii_to_unicode_le(pw, password, len);
 
-  /* Create NT hashed password. */
+  /* Create NT hashed password using MD4 (required by NTLM protocol).
+   * WARNING: MD4 is cryptographically weak and vulnerable to attacks. */
   result = Curl_md4it(ntbuffer, pw, 2 * len);
   if(!result)
     memset(ntbuffer + 16, 0, 21 - 16);
