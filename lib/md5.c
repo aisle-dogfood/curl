@@ -22,6 +22,24 @@
  *
  ***************************************************************************/
 
+/*
+ * SECURITY WARNING: MD5 is cryptographically broken and unsuitable for
+ * password hashing or secure authentication. MD5 provides insufficient
+ * computational effort against modern attacks.
+ *
+ * This implementation is maintained ONLY for legacy protocol compatibility
+ * with older systems that mandate MD5 (RFC 2617 HTTP Digest Authentication
+ * with MD5, NTLM).
+ *
+ * RECOMMENDED: Use SHA-256 or SHA-512/256 digest authentication instead
+ * (RFC 7616). These provide significantly better security.
+ *
+ * To disable MD5-based authentication entirely, compile with:
+ * -DCURL_DISABLE_DIGEST_AUTH and -DUSE_WINDOWS_SSPI for NTLM
+ *
+ * For new applications, avoid protocols that require MD5.
+ */
+
 #include "curl_setup.h"
 
 #if (defined(USE_CURL_NTLM_CORE) && !defined(USE_WINDOWS_SSPI)) || \
@@ -88,6 +106,8 @@ typedef struct md5_ctx my_md5_ctx;
 
 static CURLcode my_md5_init(void *ctx)
 {
+  /* SECURITY NOTE: MD5 is cryptographically weak. This is used only for
+     legacy protocol support. Prefer SHA-256/SHA-512 where possible. */
   md5_init(ctx);
   return CURLE_OK;
 }
@@ -111,6 +131,8 @@ typedef MD5_CTX my_md5_ctx;
 
 static CURLcode my_md5_init(void *ctx)
 {
+  /* SECURITY NOTE: MD5 is cryptographically weak. This is used only for
+     legacy protocol support. Prefer SHA-256/SHA-512 where possible. */
   if(!MD5_Init(ctx))
     return CURLE_OUT_OF_MEMORY;
 
@@ -135,6 +157,8 @@ typedef WOLFSSL_MD5_CTX my_md5_ctx;
 
 static CURLcode my_md5_init(void *ctx)
 {
+  /* SECURITY NOTE: MD5 is cryptographically weak. This is used only for
+     legacy protocol support. Prefer SHA-256/SHA-512 where possible. */
   if(!wolfSSL_MD5_Init(ctx))
     return CURLE_OUT_OF_MEMORY;
 
@@ -159,6 +183,8 @@ typedef mbedtls_md5_context my_md5_ctx;
 
 static CURLcode my_md5_init(void *ctx)
 {
+  /* SECURITY NOTE: MD5 is cryptographically weak. This is used only for
+     legacy protocol support. Prefer SHA-256/SHA-512 where possible. */
   if(mbedtls_md5_starts(ctx))
     return CURLE_OUT_OF_MEMORY;
   return CURLE_OK;
@@ -188,6 +214,8 @@ static void my_md5_final(unsigned char *digest, void *ctx)
 
 static CURLcode my_md5_init(void *ctx)
 {
+  /* SECURITY NOTE: MD5 is cryptographically weak. This is used only for
+     legacy protocol support. Prefer SHA-256/SHA-512 where possible. */
   if(!CC_MD5_Init(ctx))
     return CURLE_OUT_OF_MEMORY;
 
@@ -216,6 +244,8 @@ typedef struct md5_ctx my_md5_ctx;
 
 static CURLcode my_md5_init(void *in)
 {
+  /* SECURITY NOTE: MD5 is cryptographically weak. This is used only for
+     legacy protocol support. Prefer SHA-256/SHA-512 where possible. */
   my_md5_ctx *ctx = (my_md5_ctx *)in;
   if(!CryptAcquireContext(&ctx->hCryptProv, NULL, NULL, PROV_RSA_FULL,
                           CRYPT_VERIFYCONTEXT | CRYPT_SILENT))
@@ -472,6 +502,8 @@ static const void *my_md5_body(my_md5_ctx *ctx,
 
 static CURLcode my_md5_init(void *in)
 {
+  /* SECURITY NOTE: MD5 is cryptographically weak. This is used only for
+     legacy protocol support. Prefer SHA-256/SHA-512 where possible. */
   my_md5_ctx *ctx = (my_md5_ctx *)in;
   ctx->a = 0x67452301;
   ctx->b = 0xefcdab89;
