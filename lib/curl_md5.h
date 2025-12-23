@@ -24,6 +24,15 @@
  *
  ***************************************************************************/
 
+/*
+ * SECURITY WARNING: MD5 is cryptographically broken and unsuitable for
+ * secure password hashing. This implementation is for legacy protocol
+ * compatibility only (RFC 2617 HTTP Digest Auth MD5, NTLM).
+ *
+ * For secure authentication, use SHA-256 or SHA-512/256 digest authentication
+ * (RFC 7616) instead.
+ */
+
 #if (defined(USE_CURL_NTLM_CORE) && !defined(USE_WINDOWS_SSPI)) || \
   !defined(CURL_DISABLE_DIGEST_AUTH)
 
