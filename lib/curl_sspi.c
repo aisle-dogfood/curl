@@ -118,6 +118,23 @@ CURLcode Curl_create_sspi_identity(const char *userp, const char *passwdp,
   /* Initialize the identity */
   memset(identity, 0, sizeof(*identity));
 
+  /* Handle NULL userp */
+  if(!userp) {
+    identity->User = NULL;
+    identity->UserLength = 0;
+    identity->Domain = NULL;
+    identity->DomainLength = 0;
+    identity->Password = NULL;
+    identity->PasswordLength = 0;
+    identity->Flags = (unsigned long)
+#ifdef UNICODE
+      SEC_WINNT_AUTH_IDENTITY_UNICODE;
+#else
+      SEC_WINNT_AUTH_IDENTITY_ANSI;
+#endif
+    return CURLE_OK;
+  }
+
   useranddomain.tchar_ptr = curlx_convert_UTF8_to_tchar(userp);
   if(!useranddomain.tchar_ptr)
     return CURLE_OUT_OF_MEMORY;
@@ -151,6 +168,7 @@ CURLcode Curl_create_sspi_identity(const char *userp, const char *passwdp,
   dup_domain.tchar_ptr = malloc(sizeof(TCHAR) * (domlen + 1));
   if(!dup_domain.tchar_ptr) {
     curlx_unicodefree(useranddomain.tchar_ptr);
+    Curl_safefree(identity->User);
     return CURLE_OUT_OF_MEMORY;
   }
   _tcsncpy(dup_domain.tchar_ptr, domain.tchar_ptr, domlen);
@@ -162,19 +180,31 @@ CURLcode Curl_create_sspi_identity(const char *userp, const char *passwdp,
   curlx_unicodefree(useranddomain.tchar_ptr);
 
   /* Setup the identity's password and length */
-  passwd.tchar_ptr = curlx_convert_UTF8_to_tchar(passwdp);
-  if(!passwd.tchar_ptr)
-    return CURLE_OUT_OF_MEMORY;
-  dup_passwd.tchar_ptr = _tcsdup(passwd.tchar_ptr);
-  if(!dup_passwd.tchar_ptr) {
-    curlx_unicodefree(passwd.tchar_ptr);
-    return CURLE_OUT_OF_MEMORY;
-  }
-  identity->Password = dup_passwd.tbyte_ptr;
-  identity->PasswordLength = curlx_uztoul(_tcslen(dup_passwd.tchar_ptr));
-  dup_passwd.tchar_ptr = NULL;
+  if(passwdp) {
+    passwd.tchar_ptr = curlx_convert_UTF8_to_tchar(passwdp);
+    if(!passwd.tchar_ptr) {
+      Curl_safefree(identity->User);
+      Curl_safefree(identity->Domain);
+      return CURLE_OUT_OF_MEMORY;
+    }
+    dup_passwd.tchar_ptr = _tcsdup(passwd.tchar_ptr);
+    if(!dup_passwd.tchar_ptr) {
+      curlx_unicodefree(passwd.tchar_ptr);
+      Curl_safefree(identity->User);
+      Curl_safefree(identity->Domain);
+      return CURLE_OUT_OF_MEMORY;
+    }
+    identity->Password = dup_passwd.tbyte_ptr;
+    identity->PasswordLength = curlx_uztoul(_tcslen(dup_passwd.tchar_ptr));
+    dup_passwd.tchar_ptr = NULL;
 
-  curlx_unicodefree(passwd.tchar_ptr);
+    curlx_unicodefree(passwd.tchar_ptr);
+  }
+  else {
+    /* No password provided */
+    identity->Password = NULL;
+    identity->PasswordLength = 0;
+  }
 
   /* Setup the identity's flags */
   identity->Flags = (unsigned long)
