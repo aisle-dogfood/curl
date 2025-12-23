@@ -88,6 +88,7 @@ Example set of cookies:
 #include "strdup.h"
 #include "llist.h"
 #include "curlx/strparse.h"
+#include "curlx/inet_pton.h"
 
 /* The last 3 #include files should be in this order */
 #include "curl_printf.h"
@@ -1291,10 +1292,41 @@ static int cookie_sort_ct(const void *p1, const void *p2)
 
 bool Curl_secure_context(struct connectdata *conn, const char *host)
 {
-  return conn->handler->protocol&(CURLPROTO_HTTPS|CURLPROTO_WSS) ||
-    curl_strequal("localhost", host) ||
-    !strcmp(host, "127.0.0.1") ||
-    !strcmp(host, "::1");
+  struct in_addr in;
+#ifdef USE_IPV6
+  struct in6_addr in6;
+#endif
+
+  /* Check if using HTTPS or WSS protocol */
+  if(conn->handler->protocol&(CURLPROTO_HTTPS|CURLPROTO_WSS))
+    return TRUE;
+
+  /* Check if host is "localhost" (case-insensitive) */
+  if(curl_strequal("localhost", host))
+    return TRUE;
+
+  /* Check if host is an IPv4 loopback address (127.0.0.0/8) */
+  if(curlx_inet_pton(AF_INET, host, &in) > 0) {
+    /* Check if the first byte is 127 (loopback range is 127.0.0.0/8) */
+    unsigned char *bytes = (unsigned char *)&in.s_addr;
+    if(bytes[0] == 127)
+      return TRUE;
+  }
+
+#ifdef USE_IPV6
+  /* Check if host is IPv6 loopback address (::1) */
+  if(curlx_inet_pton(AF_INET6, host, &in6) > 0) {
+    /* Check if it's ::1 by examining the bytes */
+    const unsigned char *b = in6.s6_addr;
+    /* ::1 is 0000:0000:0000:0000:0000:0000:0000:0001 */
+    if((b[0] | b[1] | b[2] | b[3] | b[4] | b[5] | b[6] | b[7] |
+        b[8] | b[9] | b[10] | b[11] | b[12] | b[13] | b[14]) == 0 &&
+       b[15] == 1)
+      return TRUE;
+  }
+#endif
+
+  return FALSE;
 }
 
 /*
