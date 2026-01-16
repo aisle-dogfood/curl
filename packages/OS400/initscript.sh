@@ -144,11 +144,21 @@ canonicalize_path()
         fi
 
         R=
-        IFSSAVE="${IFS}"
-        IFS="/"
 
-        for C in ${P}
-        do      IFS="${IFSSAVE}"
+        # Process each component of the path without IFS manipulation
+        REMAINING="${P}"
+        while [ -n "${REMAINING}" ]
+        do
+                # Extract first component (everything before first /)
+                case "${REMAINING}" in
+                */*)    C="${REMAINING%%/*}"
+                        REMAINING="${REMAINING#*/}"
+                        ;;
+                *)      C="${REMAINING}"
+                        REMAINING=""
+                        ;;
+                esac
+
                 case "${C}" in
                 .)      ;;
                 ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
@@ -159,7 +169,6 @@ canonicalize_path()
                 esac
         done
 
-        IFS="${IFSSAVE}"
         echo "/$(expr "${R}" : '^\(.*\)/')"
 }
 
