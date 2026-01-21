@@ -144,11 +144,11 @@ canonicalize_path()
         fi
 
         R=
-        IFSSAVE="${IFS}"
-        IFS="/"
-
-        for C in ${P}
-        do      IFS="${IFSSAVE}"
+        
+        # Split path by '/' using tr and here-doc to avoid IFS manipulation
+        # This approach avoids setting IFS globally and the subshell issues of pipes
+        while read -r C
+        do
                 case "${C}" in
                 .)      ;;
                 ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
@@ -157,9 +157,10 @@ canonicalize_path()
                         ;;
                 *)      ;;
                 esac
-        done
-
-        IFS="${IFSSAVE}"
+        done <<EOF
+$(echo "${P}" | tr '/' '\n')
+EOF
+        
         echo "/$(expr "${R}" : '^\(.*\)/')"
 }
 
