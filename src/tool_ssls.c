@@ -23,6 +23,11 @@
  ***************************************************************************/
 #include "tool_setup.h"
 
+#ifdef HAVE_FCNTL_H
+/* for open() */
+#include <fcntl.h>
+#endif
+
 #include "tool_cfgable.h"
 #include "tool_cb_dbg.h"
 #include "tool_msgs.h"
@@ -188,14 +193,36 @@ CURLcode tool_ssls_save(struct OperationConfig *config,
   struct tool_ssls_ctx ctx;
   CURL *easy = NULL;
   CURLcode r = CURLE_OK;
+  int fd = -1;
 
   ctx.exported = 0;
-  ctx.fp = fopen(filename, FOPEN_WRITETEXT);
-  if(!ctx.fp) {
+  ctx.fp = NULL;
+
+  /* Create the file with restrictive permissions to protect sensitive TLS
+     session material from unauthorized access. On Unix-like systems, mode 0600
+     ensures only the owner can read/write. On Windows, use S_IREAD | S_IWRITE
+     which relies on the default ACLs for protection. */
+#ifdef _WIN32
+  fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | CURL_O_BINARY,
+            _S_IREAD | _S_IWRITE);
+#else
+  fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | CURL_O_BINARY, 0600);
+#endif
+
+  if(fd == -1) {
     warnf("Warning: Failed to create SSL session file %s",
           filename);
     goto out;
   }
+
+  ctx.fp = fdopen(fd, FOPEN_WRITETEXT);
+  if(!ctx.fp) {
+    warnf("Warning: Failed to open SSL session file stream %s",
+          filename);
+    close(fd);
+    goto out;
+  }
+  /* fd is now owned by FILE*, will be closed by fclose() */
 
   r = tool_ssls_easy(config, share, &easy);
   if(r)
