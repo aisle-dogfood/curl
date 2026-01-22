@@ -44,6 +44,9 @@
 #define CW_PAUSE_BUF_CHUNK         (16 * 1024)
 /* when content decoding, write data in chunks */
 #define CW_PAUSE_DEC_WRITE_CHUNK   (4096)
+/* Maximum total pause buffer size to prevent unbounded memory growth.
+ * Set to 64 MB, matching DYN_PAUSE_BUFFER used in cw-out.c */
+#define CW_PAUSE_MAX_TOTAL_SIZE    (64 * 1024 * 1024)
 
 struct cw_pause_buf {
   struct cw_pause_buf *next;
@@ -202,6 +205,12 @@ static CURLcode cw_pause_write(struct Curl_easy *data,
 
   do {
     size_t nwritten = 0;
+    /* Check if adding blen would exceed the maximum pause buffer limit */
+    if(ctx->buf_total + blen > CW_PAUSE_MAX_TOTAL_SIZE) {
+      failf(data, "pause buffer limit exceeded (%zu + %zu > %d)",
+            ctx->buf_total, blen, CW_PAUSE_MAX_TOTAL_SIZE);
+      return CURLE_TOO_LARGE;
+    }
     if(ctx->buf && (ctx->buf->type == type) && (type & CLIENTWRITE_BODY)) {
       /* same type and body, append to current buffer which has a soft
        * limit and should take everything up to OOM. */
