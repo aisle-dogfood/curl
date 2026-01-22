@@ -180,6 +180,146 @@ static CURLcode mqtt_setup_conn(struct Curl_easy *data,
   return CURLE_OK;
 }
 
+/* Sanitize MQTT CONNECT packet by redacting username and password fields.
+   Returns a newly allocated sanitized buffer or NULL on error.
+   Caller must free the returned buffer. */
+static char *mqtt_sanitize_connect(const char *buf, size_t len)
+{
+  char *sanitized;
+  size_t pos;
+  unsigned char flags;
+  size_t remain_len_bytes;
+  size_t client_id_len;
+  size_t user_len;
+  size_t pwd_len;
+
+  /* CONNECT packet minimum size check */
+  if(len < 14)
+    return NULL;
+
+  /* Check if this is a CONNECT packet */
+  if((unsigned char)buf[0] != MQTT_MSG_CONNECT)
+    return NULL;
+
+  /* Allocate buffer for sanitized copy */
+  sanitized = malloc(len);
+  if(!sanitized)
+    return NULL;
+
+  /* Copy the entire packet first */
+  memcpy(sanitized, buf, len);
+
+  /* Parse remaining length (variable length encoding, 1-4 bytes) */
+  remain_len_bytes = 1;
+  pos = 1;
+  while(pos < len && (buf[pos] & 0x80) && remain_len_bytes < 4) {
+    remain_len_bytes++;
+    pos++;
+  }
+  if(pos >= len)
+    goto error;
+
+  pos++; /* Move past the last remaining length byte */
+
+  /* Variable header starts here */
+  /* Skip protocol name length (2 bytes) + protocol name (4 bytes "MQTT") */
+  if(pos + 6 >= len)
+    goto error;
+  pos += 6;
+
+  /* Protocol level (1 byte) */
+  if(pos >= len)
+    goto error;
+  pos++;
+
+  /* Connect flags (1 byte) - this tells us if username/password are present */
+  if(pos >= len)
+    goto error;
+  flags = (unsigned char)buf[pos];
+  pos++;
+
+  /* Skip keep-alive (2 bytes) */
+  if(pos + 2 >= len)
+    goto error;
+  pos += 2;
+
+  /* Now we're at the payload start */
+  /* Client ID length (2 bytes MSB) */
+  if(pos + 2 >= len)
+    goto error;
+  client_id_len = ((unsigned char)buf[pos] << 8) | (unsigned char)buf[pos + 1];
+  pos += 2;
+
+  /* Skip client ID */
+  if(pos + client_id_len >= len)
+    goto error;
+  pos += client_id_len;
+
+  /* If Will Flag is set (bit 2), skip Will Topic and Will Message */
+  if(flags & 0x04) {
+    size_t will_topic_len;
+    size_t will_msg_len;
+
+    /* Will Topic length */
+    if(pos + 2 >= len)
+      goto error;
+    will_topic_len = ((unsigned char)buf[pos] << 8) |
+                     (unsigned char)buf[pos + 1];
+    pos += 2;
+
+    /* Skip Will Topic */
+    if(pos + will_topic_len >= len)
+      goto error;
+    pos += will_topic_len;
+
+    /* Will Message length */
+    if(pos + 2 >= len)
+      goto error;
+    will_msg_len = ((unsigned char)buf[pos] << 8) |
+                   (unsigned char)buf[pos + 1];
+    pos += 2;
+
+    /* Skip Will Message */
+    if(pos + will_msg_len > len)
+      goto error;
+    pos += will_msg_len;
+  }
+
+  /* Redact username if present (flag bit 7) */
+  if(flags & 0x80) {
+    if(pos + 2 >= len)
+      goto error;
+    user_len = ((unsigned char)buf[pos] << 8) | (unsigned char)buf[pos + 1];
+    pos += 2;
+    if(pos + user_len > len)
+      goto error;
+    /* Redact username bytes with asterisks */
+    if(user_len > 0)
+      memset(&sanitized[pos], '*', user_len);
+    pos += user_len;
+  }
+
+  /* Redact password if present (flag bit 6) */
+  if(flags & 0x40) {
+    if(pos + 2 >= len)
+      goto error;
+    pwd_len = ((unsigned char)buf[pos] << 8) | (unsigned char)buf[pos + 1];
+    pos += 2;
+    if(pos + pwd_len > len)
+      goto error;
+    /* Redact password bytes with asterisks */
+    if(pwd_len > 0)
+      memset(&sanitized[pos], '*', pwd_len);
+    pos += pwd_len;
+  }
+
+  return sanitized;
+
+error:
+  free(sanitized);
+  return NULL;
+}
+
 static CURLcode mqtt_send(struct Curl_easy *data,
                           const char *buf, size_t len)
 {
@@ -194,7 +334,25 @@ static CURLcode mqtt_send(struct Curl_easy *data,
   if(result)
     return result;
   mq->lastTime = curlx_now();
-  Curl_debug(data, CURLINFO_HEADER_OUT, buf, (size_t)n);
+
+  /* Sanitize CONNECT packets before logging to avoid exposing credentials */
+  if(n > 0 && (unsigned char)buf[0] == MQTT_MSG_CONNECT) {
+    char *sanitized = mqtt_sanitize_connect(buf, n);
+    if(sanitized) {
+      Curl_debug(data, CURLINFO_HEADER_OUT, sanitized, n);
+      free(sanitized);
+    }
+    else {
+      /* If sanitization fails, log a generic message instead of raw packet */
+      Curl_debug(data, CURLINFO_HEADER_OUT,
+                 "MQTT CONNECT (credentials redacted)\n", 37);
+    }
+  }
+  else {
+    /* For non-CONNECT packets, log normally */
+    Curl_debug(data, CURLINFO_HEADER_OUT, buf, n);
+  }
+
   if(len != n) {
     size_t nsend = len - n;
     if(curlx_dyn_len(&mq->sendbuf)) {
