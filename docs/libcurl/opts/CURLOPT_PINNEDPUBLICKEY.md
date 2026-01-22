@@ -45,6 +45,10 @@ indicating its identity. A public key is extracted from this certificate and
 if it does not exactly match the public key provided to this option, curl
 aborts the connection before sending or receiving any data.
 
+When this option is used, TLS 1.3 early data (0-RTT) is automatically disabled
+to ensure no application data is sent before the peer's public key has been
+verified.
+
 This option is independent of option CURLOPT_SSL_VERIFYPEER(3). If you turn
 off that option then the peer is still verified by public key.
 

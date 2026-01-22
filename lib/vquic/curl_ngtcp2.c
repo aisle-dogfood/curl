@@ -2366,6 +2366,7 @@ static CURLcode cf_ngtcp2_on_session_reuse(struct Curl_cfilter *cf,
 {
   struct cf_ngtcp2_ctx *ctx = cf->ctx;
   CURLcode result = CURLE_OK;
+  const char *pinnedpubkey = data->set.str[STRING_SSL_PINNEDPUBLICKEY];
 
   *do_early_data = FALSE;
 #if defined(USE_OPENSSL) && defined(HAVE_OPENSSL_EARLYDATA)
@@ -2392,6 +2393,9 @@ static CURLcode cf_ngtcp2_on_session_reuse(struct Curl_cfilter *cf,
   }
   else if(!scs->quic_tp || !scs->quic_tp_len) {
     CURL_TRC_CF(data, cf, "no 0RTT transport parameters, no early data, ");
+  }
+  else if(pinnedpubkey) {
+    CURL_TRC_CF(data, cf, "pinned public key set, no early data");
   }
   else {
     int rv;

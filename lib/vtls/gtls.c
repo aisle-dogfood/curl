@@ -1071,6 +1071,13 @@ static CURLcode gtls_on_session_reuse(struct Curl_cfilter *cf,
   struct gtls_ssl_backend_data *backend =
     (struct gtls_ssl_backend_data *)connssl->backend;
   CURLcode result = CURLE_OK;
+#ifndef CURL_DISABLE_PROXY
+  const char *pinnedpubkey = Curl_ssl_cf_is_proxy(cf) ?
+    data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY] :
+    data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#else
+  const char *pinnedpubkey = data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#endif
 
   *do_early_data = FALSE;
   connssl->earlydata_max =
@@ -1081,6 +1088,9 @@ static CURLcode gtls_on_session_reuse(struct Curl_cfilter *cf,
   }
   else if(!Curl_alpn_contains_proto(alpns, scs->alpn)) {
     CURL_TRC_CF(data, cf, "SSL session has different ALPN, no early data");
+  }
+  else if(pinnedpubkey) {
+    CURL_TRC_CF(data, cf, "pinned public key set, no early data");
   }
   else {
     infof(data, "SSL session allows %zu bytes of early data, "
