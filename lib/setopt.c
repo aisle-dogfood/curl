@@ -44,6 +44,7 @@
 #include "share.h"
 #include "vtls/vtls.h"
 #include "curlx/warnless.h"
+#include "curlx/inet_pton.h"
 #include "sendf.h"
 #include "hostip.h"
 #include "http2.h"
@@ -137,6 +138,40 @@ CURLcode Curl_setblobopt(struct curl_blob **blobp,
 
   return CURLE_OK;
 }
+
+#ifndef CURL_DISABLE_PROXY
+/*
+ * Validate that a string contains only a valid IPv4 or IPv6 address.
+ * This is used to prevent CRLF injection attacks in the HAProxy PROXY
+ * protocol header.
+ */
+static bool is_valid_ip_address(const char *ip)
+{
+  unsigned char buf[sizeof(struct in6_addr)];
+  const char *p;
+
+  if(!ip || !*ip)
+    return FALSE;
+
+  /* Check for control characters, CR, LF, and other dangerous chars */
+  for(p = ip; *p; p++) {
+    unsigned char c = (unsigned char)*p;
+    /* Reject control characters (0x00-0x1F) and DEL (0x7F) */
+    if(c < 0x20 || c == 0x7F)
+      return FALSE;
+  }
+
+  /* Try to parse as IPv4 */
+  if(curlx_inet_pton(AF_INET, ip, buf) == 1)
+    return TRUE;
+
+  /* Try to parse as IPv6 */
+  if(curlx_inet_pton(AF_INET6, ip, buf) == 1)
+    return TRUE;
+
+  return FALSE;
+}
+#endif
 
 static CURLcode setstropt_userpwd(char *option, char **userp, char **passwdp)
 {
@@ -2165,9 +2200,16 @@ static CURLcode setopt_cptr(struct Curl_easy *data, CURLoption option,
     /*
      * Set the client IP to send through HAProxy PROXY protocol
      */
+    if(ptr) {
+      /* Validate that the input is a valid IP address to prevent CRLF
+         injection attacks */
+      if(!is_valid_ip_address(ptr))
+        return CURLE_BAD_FUNCTION_ARGUMENT;
+    }
     result = Curl_setstropt(&s->str[STRING_HAPROXY_CLIENT_IP], ptr);
-    /* enable the HAProxy protocol */
-    s->haproxyprotocol = TRUE;
+    if(!result)
+      /* enable the HAProxy protocol */
+      s->haproxyprotocol = TRUE;
     break;
 
 #endif
