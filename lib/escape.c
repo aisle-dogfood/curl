@@ -102,8 +102,8 @@ char *curl_easy_escape(CURL *data, const char *string,
  *
  * ctrl options:
  * - REJECT_NADA: accept everything
- * - REJECT_CTRL: rejects control characters (byte codes lower than 32) in
- *                the data
+ * - REJECT_CTRL: rejects control characters (byte codes lower than 32 and
+ *                0x7F) in the data
  * - REJECT_ZERO: rejects decoded zero bytes
  *
  * The values for the enum starts at 2, to make the assert detect legacy
@@ -144,7 +144,7 @@ CURLcode Curl_urldecode(const char *string, size_t length,
       alloc--;
     }
 
-    if(((ctrl == REJECT_CTRL) && (in < 0x20)) ||
+    if(((ctrl == REJECT_CTRL) && ((in < 0x20) || (in == 0x7f))) ||
        ((ctrl == REJECT_ZERO) && (in == 0))) {
       Curl_safefree(*ostring);
       return CURLE_URL_MALFORMAT;

@@ -80,6 +80,7 @@
 #include "curlx/warnless.h"
 #include "idn.h"
 #include "curlx/strparse.h"
+#include "curl_ctype.h"
 
 /* The last 3 #include files should be in this order */
 #include "curl_printf.h"
@@ -168,6 +169,7 @@ static CURLcode smtp_parse_url_path(struct Curl_easy *data,
                                     struct smtp_conn *smtpc);
 static CURLcode smtp_parse_custom_request(struct Curl_easy *data,
                                           struct SMTP *smtp);
+static CURLcode smtp_check_crlf(const char *str);
 static CURLcode smtp_parse_address(const char *fqma,
                                    char **address, struct hostname *host,
                                    const char **suffix);
@@ -648,6 +650,11 @@ static CURLcode smtp_perform_command(struct Curl_easy *data,
       free(address);
     }
     else {
+      /* Check for control characters in custom command target */
+      result = smtp_check_crlf(smtp->rcpt->data);
+      if(result)
+        return result;
+
       /* Establish whether we should report that we support SMTPUTF8 for EXPN
          commands to the server as per RFC-6531 sect. 3.1 point 6 */
       utf8 = (smtpc->utf8_supported) && (!strcmp(smtp->custom, "EXPN"));
@@ -1841,6 +1848,30 @@ static CURLcode smtp_parse_custom_request(struct Curl_easy *data,
 
 /***********************************************************************
  *
+ * smtp_check_crlf()
+ *
+ * Check if a string contains control characters (CR, LF, or other control
+ * characters) that could be used for SMTP command injection.
+ *
+ * Returns CURLE_OK if the string is safe, CURLE_URL_MALFORMAT if control
+ * characters are detected.
+ */
+static CURLcode smtp_check_crlf(const char *str)
+{
+  if(str) {
+    const char *p;
+    for(p = str; *p; p++) {
+      if(ISCNTRL(*p)) {
+        /* Control character detected (0x00-0x1F or 0x7F) */
+        return CURLE_URL_MALFORMAT;
+      }
+    }
+  }
+  return CURLE_OK;
+}
+
+/***********************************************************************
+ *
  * smtp_parse_address()
  *
  * Parse the fully qualified mailbox address into a local address part and the
@@ -1879,10 +1910,16 @@ static CURLcode smtp_parse_address(const char *fqma, char **address,
   CURLcode result = CURLE_OK;
   size_t length;
   char *addressend;
+  char *dup;
+
+  /* Check for control characters before processing */
+  result = smtp_check_crlf(fqma);
+  if(result)
+    return result;
 
   /* Duplicate the fully qualified email address so we can manipulate it,
      ensuring it does not contain the delimiters if specified */
-  char *dup = strdup(fqma[0] == '<' ? fqma + 1  : fqma);
+  dup = strdup(fqma[0] == '<' ? fqma + 1  : fqma);
   if(!dup)
     return CURLE_OUT_OF_MEMORY;
 
