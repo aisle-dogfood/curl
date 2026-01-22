@@ -50,11 +50,20 @@ static CURLcode test_lib566(const char *URL)
   res = curl_easy_perform(curl);
 
   if(!res) {
-    FILE *moo;
+    FILE *moo = NULL;
     res = curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD,
                             &content_length);
 
-    moo = fopen(libtest_arg2, "wb");
+    /* Create file with restrictive permissions */
+    {
+      int fd = open(libtest_arg2, O_WRONLY | O_CREAT | O_TRUNC,
+                    S_IRUSR | S_IWUSR);
+      if(fd != -1) {
+        moo = fdopen(fd, "wb");
+        if(!moo)
+          close(fd);
+      }
+    }
     if(moo) {
       curl_mfprintf(moo, "CL %.0f\n", content_length);
       fclose(moo);

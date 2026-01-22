@@ -731,11 +731,20 @@ void ourWriteOut(struct OperationConfig *config, struct per_transfer *per,
             char fname[512]; /* holds the longest filename */
             size_t flen = end - ptr;
             if(flen < sizeof(fname)) {
-              FILE *stream2;
+              FILE *stream2 = NULL;
               memcpy(fname, ptr, flen);
               fname[flen] = 0;
-              stream2 = fopen(fname, append ? FOPEN_APPENDTEXT :
-                              FOPEN_WRITETEXT);
+              /* Create file with restrictive permissions */
+              {
+                int flags = O_CREAT | O_WRONLY | (append ? O_APPEND : O_TRUNC);
+                int fd = open(fname, flags, S_IRUSR | S_IWUSR);
+                if(fd != -1) {
+                  stream2 = fdopen(fd, append ? FOPEN_APPENDTEXT :
+                                   FOPEN_WRITETEXT);
+                  if(!stream2)
+                    close(fd);
+                }
+              }
               if(stream2) {
                 /* only change if the open worked */
                 if(fclose_stream)

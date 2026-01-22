@@ -30,7 +30,18 @@ static FILE *out_download;
 
 static int setup_h2_serverpush(CURL *hnd, const char *url)
 {
-  out_download = fopen("download_0.data", "wb");
+  /* Create file with restrictive permissions */
+  {
+    int fd = open("download_0.data", O_WRONLY | O_CREAT | O_TRUNC,
+                  S_IRUSR | S_IWUSR);
+    if(fd != -1) {
+      out_download = fdopen(fd, "wb");
+      if(!out_download)
+        close(fd);
+    }
+    else
+      out_download = NULL;
+  }
   if(!out_download)
     return 1;  /* failed */
 
@@ -72,7 +83,17 @@ static int server_push_callback(CURL *parent,
   curl_msnprintf(filename, sizeof(filename) - 1, "push%u", count++);
 
   /* here's a new stream, save it in a new file for each new push */
-  out_push = fopen(filename, "wb");
+  /* Create file with restrictive permissions */
+  {
+    int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+    if(fd != -1) {
+      out_push = fdopen(fd, "wb");
+      if(!out_push)
+        close(fd);
+    }
+    else
+      out_push = NULL;
+  }
   if(!out_push) {
     /* if we cannot save it, deny it */
     curl_mfprintf(stderr, "Failed to create output file for push\n");

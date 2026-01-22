@@ -124,8 +124,16 @@ int tool_debug_cb(CURL *handle, curl_infotype type,
       /* Ok, this is somewhat hackish but we do it undocumented for now */
       global->trace_stream = tool_stderr;
     else {
-      global->trace_stream = fopen(global->trace_dump, FOPEN_WRITETEXT);
-      global->trace_fopened = TRUE;
+      /* Create trace file with restrictive permissions */
+      int fd = open(global->trace_dump, O_CREAT | O_WRONLY | O_TRUNC,
+                    S_IRUSR | S_IWUSR);
+      if(fd != -1) {
+        global->trace_stream = fdopen(fd, FOPEN_WRITETEXT);
+        if(!global->trace_stream)
+          close(fd);
+        else
+          global->trace_fopened = TRUE;
+      }
     }
   }
 

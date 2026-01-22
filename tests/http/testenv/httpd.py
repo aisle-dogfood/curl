@@ -276,26 +276,36 @@ class Httpd:
         self._mkpath(self._logs_dir)
         self._mkpath(self._tmp_dir)
         self._mkpath(os.path.join(self._docs_dir, 'two'))
-        with open(os.path.join(self._docs_dir, 'data.json'), 'w') as fd:
+        # Create files with restrictive permissions (0o600)
+        fd_path = os.path.join(self._docs_dir, 'data.json')
+        fd_num = os.open(fd_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd_num, 'w') as fd:
             data = {
                 'server': f'{domain1}',
             }
             fd.write(JSONEncoder().encode(data))
-        with open(os.path.join(self._docs_dir, 'two/data.json'), 'w') as fd:
+        fd_path = os.path.join(self._docs_dir, 'two/data.json')
+        fd_num = os.open(fd_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd_num, 'w') as fd:
             data = {
                 'server': f'{domain2}',
             }
             fd.write(JSONEncoder().encode(data))
         if self._proxy_auth_basic:
-            with open(self._basic_passwords, 'w') as fd:
+            fd_num = os.open(self._basic_passwords, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd_num, 'w') as fd:
                 fd.write('proxy:$apr1$FQfeInbs$WQZbODJlVg60j0ogEIlTW/\n')
         if self._auth_digest:
-            with open(self._digest_passwords, 'w') as fd:
+            fd_num = os.open(self._digest_passwords, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd_num, 'w') as fd:
                 fd.write('test:restricted area:57123e269fd73d71ae0656594e938e2f\n')
             self._mkpath(os.path.join(self.docs_dir, 'restricted/digest'))
-            with open(os.path.join(self.docs_dir, 'restricted/digest/data.json'), 'w') as fd:
+            fd_path = os.path.join(self.docs_dir, 'restricted/digest/data.json')
+            fd_num = os.open(fd_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd_num, 'w') as fd:
                 fd.write('{"area":"digest"}\n')
-        with open(self._conf_file, 'w') as fd:
+        fd_num = os.open(self._conf_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd_num, 'w') as fd:
             for m in self.MODULES:
                 if os.path.exists(os.path.join(self._mods_dir, f'mod_{m}.so')):
                     fd.write(f'LoadModule {m}_module   "{self._mods_dir}/mod_{m}.so"\n')
@@ -482,7 +492,9 @@ class Httpd:
             ])
 
             fd.write("\n".join(conf))
-        with open(os.path.join(self._conf_dir, 'mime.types'), 'w') as fd:
+        fd_path = os.path.join(self._conf_dir, 'mime.types')
+        fd_num = os.open(fd_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd_num, 'w') as fd:
             fd.write("\n".join([
                 'text/plain            txt',
                 'text/html             html',

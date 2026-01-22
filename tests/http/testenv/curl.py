@@ -187,7 +187,10 @@ class RunTcpDump:
             args.extend([
                 tcpdump, '-i', local_if, '-n', 'tcp[tcpflags] & (tcp-rst)!=0'
             ])
-            with open(self._stdoutfile, 'w') as cout, open(self._stderrfile, 'w') as cerr:
+            # Create files with restrictive permissions (0o600)
+            cout_fd = os.open(self._stdoutfile, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            cerr_fd = os.open(self._stderrfile, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(cout_fd, 'w') as cout, os.fdopen(cerr_fd, 'w') as cerr:
                 self._proc = subprocess.Popen(args, stdout=cout, stderr=cerr,
                                               text=True, cwd=self._run_dir,
                                               shell=False)
@@ -812,7 +815,10 @@ class CurlClient:
             tcpdump.start()
         started_at = datetime.now()
         try:
-            with open(self._stdoutfile, 'w') as cout, open(self._stderrfile, 'w') as cerr:
+            # Create files with restrictive permissions (0o600)
+            cout_fd = os.open(self._stdoutfile, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            cerr_fd = os.open(self._stderrfile, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(cout_fd, 'w') as cout, os.fdopen(cerr_fd, 'w') as cerr:
                 if with_profile:
                     end_at = started_at + timedelta(seconds=self._timeout) \
                         if self._timeout else None
@@ -1022,7 +1028,10 @@ class CurlClient:
         log.info('waiting a sec for dtrace to finish flusheing its buffers')
         time.sleep(1)
         log.info(f'collapsing stacks into {file_collapsed}')
-        with open(file_collapsed, 'w') as cout, open(file_err, 'w') as cerr:
+        # Create files with restrictive permissions (0o600)
+        cout_fd = os.open(file_collapsed, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        cerr_fd = os.open(file_err, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(cout_fd, 'w') as cout, os.fdopen(cerr_fd, 'w') as cerr:
             p = subprocess.run([
                 fg_collapse, dtrace.file
             ], stdout=cout, stderr=cerr, cwd=self._run_dir, shell=False)
@@ -1037,7 +1046,10 @@ class CurlClient:
         else:
             title = cmdline
             subtitle = ''
-        with open(file_svg, 'w') as cout, open(file_err, 'w') as cerr:
+        # Create files with restrictive permissions (0o600)
+        cout_fd = os.open(file_svg, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        cerr_fd = os.open(file_err, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(cout_fd, 'w') as cout, os.fdopen(cerr_fd, 'w') as cerr:
             p = subprocess.run([
                 fg_gen_flame, '--colors', 'green',
                 '--title', title, '--subtitle', subtitle,

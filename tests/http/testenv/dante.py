@@ -170,5 +170,7 @@ class Dante:
             '}',
             '\n',
         ]
-        with open(self._conf_file, 'w') as fd:
+        # Create file with restrictive permissions (0o600)
+        fd_num = os.open(self._conf_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd_num, 'w') as fd:
             fd.write("\n".join(conf))

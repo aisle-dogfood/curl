@@ -190,7 +190,17 @@ CURLcode tool_ssls_save(struct OperationConfig *config,
   CURLcode r = CURLE_OK;
 
   ctx.exported = 0;
-  ctx.fp = fopen(filename, FOPEN_WRITETEXT);
+  /* Create file with restrictive permissions (0600) */
+  {
+    int fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+    if(fd != -1) {
+      ctx.fp = fdopen(fd, FOPEN_WRITETEXT);
+      if(!ctx.fp)
+        close(fd);
+    }
+    else
+      ctx.fp = NULL;
+  }
   if(!ctx.fp) {
     warnf("Warning: Failed to create SSL session file %s",
           filename);
