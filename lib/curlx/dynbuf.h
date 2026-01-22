@@ -67,6 +67,7 @@ char *curlx_dyn_take(struct dynbuf *s, size_t *plen);
 #define DYN_DOH_RESPONSE    3000
 #define DYN_DOH_CNAME       256
 #define DYN_PAUSE_BUFFER    (64 * 1024 * 1024)
+#define DYN_PAUSE_BUFFER_SOFT (48 * 1024 * 1024) /* 75% soft watermark */
 #define DYN_HAXPROXY        2048
 #define DYN_HTTP_REQUEST    (1024*1024)
 #define DYN_APRINTF         8000000

@@ -69,7 +69,10 @@
  * When unpausing, this list is "played back" to the client callbacks.
  *
  * The amount of bytes being buffered is limited by `DYN_PAUSE_BUFFER`
- * and when that is exceeded `CURLE_TOO_LARGE` is returned as error.
+ * (hard cap: 64 MiB) and when that is exceeded `CURLE_TOO_LARGE` is
+ * returned as error. A soft watermark at `DYN_PAUSE_BUFFER_SOFT`
+ * (75% of hard cap) provides early warning via infof() to allow
+ * applications to react before hitting the hard limit.
  */
 typedef enum {
   CW_OUT_NONE,
@@ -107,6 +110,7 @@ struct cw_out_ctx {
   struct cw_out_buf *buf;
   BIT(paused);
   BIT(errored);
+  BIT(soft_limit_warned); /* Warned about approaching soft limit */
 };
 
 static CURLcode cw_out_write(struct Curl_easy *data,
@@ -141,6 +145,8 @@ static void cw_out_bufs_free(struct cw_out_ctx *ctx)
     cw_out_buf_free(ctx->buf);
     ctx->buf = next;
   }
+  /* Reset soft limit warning when buffers are freed */
+  ctx->soft_limit_warned = FALSE;
 }
 
 static size_t cw_out_bufs_len(struct cw_out_ctx *ctx)
@@ -355,6 +361,12 @@ static CURLcode cw_out_flush_chain(struct cw_out_ctx *ctx,
     cw_out_buf_free(cwbuf);
     *pcwbuf = NULL;
   }
+
+  /* Reset soft limit warning if buffer size dropped below soft watermark */
+  if(ctx->soft_limit_warned && cw_out_bufs_len(ctx) <= DYN_PAUSE_BUFFER_SOFT) {
+    ctx->soft_limit_warned = FALSE;
+  }
+
   return CURLE_OK;
 }
 
@@ -363,11 +375,25 @@ static CURLcode cw_out_append(struct cw_out_ctx *ctx,
                               cw_out_type otype,
                               const char *buf, size_t blen)
 {
+  size_t current_len = cw_out_bufs_len(ctx);
+  size_t new_len = current_len + blen;
+
   CURL_TRC_WRITE(data, "[OUT] paused, buffering %zu more bytes (%zu/%d)",
-                 blen, cw_out_bufs_len(ctx), DYN_PAUSE_BUFFER);
-  if(cw_out_bufs_len(ctx) + blen > DYN_PAUSE_BUFFER) {
+                 blen, current_len, DYN_PAUSE_BUFFER);
+
+  /* Hard cap check - enforce maximum buffer size */
+  if(new_len > DYN_PAUSE_BUFFER) {
     failf(data, "pause buffer not large enough -> CURLE_TOO_LARGE");
     return CURLE_TOO_LARGE;
+  }
+
+  /* Soft watermark check - warn when approaching limit to allow application
+   * to react before hitting hard cap */
+  if(!ctx->soft_limit_warned && new_len > DYN_PAUSE_BUFFER_SOFT) {
+    infof(data, "Pause buffer approaching limit: %zu/%d bytes (soft limit: "
+          "%d). Consider unpausing to avoid CURLE_TOO_LARGE.",
+          new_len, DYN_PAUSE_BUFFER, DYN_PAUSE_BUFFER_SOFT);
+    ctx->soft_limit_warned = TRUE;
   }
 
   /* if we do not have a buffer, or it is of another type, make a new one.
