@@ -730,7 +730,9 @@ class Env:
         s10 = "0123456789"
         s = round((line_length / 10) + 1) * s10
         s = s[0:line_length-11]
-        with open(fpath, 'w') as fd:
+        # Create file with restrictive permissions (0o600)
+        fd_num = os.open(fpath, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd_num, 'w') as fd:
             for i in range(int(fsize / line_length)):
                 fd.write(f"{i:09d}-{s}\n")
             remain = int(fsize % line_length)
@@ -744,14 +746,17 @@ class Env:
         gzpath = f'{fpath}.gz'
         varpath = f'{fpath}.var'
 
-        with open(fpath, 'w') as fd:
+        # Create files with restrictive permissions (0o600)
+        fd_num = os.open(fpath, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd_num, 'w') as fd:
             fd.write('not what we are looking for!\n')
         count = int(fsize / 1024)
         zero1k = bytearray(1024)
         with gzip.open(gzpath, 'wb') as fd:
             for _ in range(count):
                 fd.write(zero1k)
-        with open(varpath, 'w') as fd:
+        fd_num = os.open(varpath, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd_num, 'w') as fd:
             fd.write(f'URI: {fname}\n')
             fd.write('\n')
             fd.write(f'URI: {fname}.gz\n')

@@ -102,9 +102,17 @@ CURLcode Curl_fopen(struct Curl_easy *data, const char *filename,
   char *dir = NULL;
   *tempname = NULL;
 
-  *fh = fopen(filename, FOPEN_WRITETEXT);
-  if(!*fh)
+  /* Try to open with restrictive permissions first */
+  fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+  if(fd == -1)
     goto fail;
+
+  *fh = fdopen(fd, FOPEN_WRITETEXT);
+  if(!*fh) {
+    close(fd);
+    goto fail;
+  }
+
   if(
 #ifdef UNDER_CE
      stat(filename, &sb) == -1
@@ -116,6 +124,7 @@ CURLcode Curl_fopen(struct Curl_easy *data, const char *filename,
   }
   fclose(*fh);
   *fh = NULL;
+  fd = -1;
 
   result = Curl_rand_alnum(data, randbuf, sizeof(randbuf));
   if(result)

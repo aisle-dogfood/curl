@@ -94,7 +94,16 @@ static size_t my_write_d_cb(char *buf, size_t nitems, size_t buflen,
   if(!t->out) {
     curl_msnprintf(t->filename, sizeof(t->filename)-1, "download_%zu.data",
                    t->idx);
-    t->out = fopen(t->filename, "wb");
+    /* Create file with restrictive permissions */
+    {
+      int fd = open(t->filename, O_WRONLY | O_CREAT | O_TRUNC,
+                    S_IRUSR | S_IWUSR);
+      if(fd != -1) {
+        t->out = fdopen(fd, "wb");
+        if(!t->out)
+          close(fd);
+      }
+    }
     if(!t->out)
       return 0;
   }

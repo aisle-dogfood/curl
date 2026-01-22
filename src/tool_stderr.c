@@ -49,13 +49,23 @@ void tool_set_stderr_file(const char *filename)
   }
 
   /* precheck that filename is accessible to lessen the chance that the
-     subsequent freopen will fail. */
-  fp = fopen(filename, FOPEN_WRITETEXT);
-  if(!fp) {
-    warnf("Warning: Failed to open %s", filename);
-    return;
+     subsequent freopen will fail. Create with restrictive permissions. */
+  {
+    int fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+    if(fd != -1) {
+      fp = fdopen(fd, FOPEN_WRITETEXT);
+      if(!fp) {
+        close(fd);
+        warnf("Warning: Failed to open %s", filename);
+        return;
+      }
+      fclose(fp);
+    }
+    else {
+      warnf("Warning: Failed to open %s", filename);
+      return;
+    }
   }
-  fclose(fp);
 
   /* freopen the actual stderr (stdio.h stderr) instead of tool_stderr since
      the latter may be set to stdout. */

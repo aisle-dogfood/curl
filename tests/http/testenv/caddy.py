@@ -168,12 +168,16 @@ class Caddy:
         assert creds2  # convince pytype this isn't None
         self._mkpath(self._docs_dir)
         self._mkpath(self._tmp_dir)
-        with open(os.path.join(self._docs_dir, 'data.json'), 'w') as fd:
+        # Create files with restrictive permissions (0o600)
+        fd_path = os.path.join(self._docs_dir, 'data.json')
+        fd_num = os.open(fd_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd_num, 'w') as fd:
             data = {
                 'server': f'{domain1}',
             }
             fd.write(JSONEncoder().encode(data))
-        with open(self._conf_file, 'w') as fd:
+        fd_num = os.open(self._conf_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd_num, 'w') as fd:
             conf = [   # base server config
                 '{',
                 f'  http_port {self._http_port}',

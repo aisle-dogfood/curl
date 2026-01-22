@@ -38,7 +38,17 @@ static CURLcode test_lib569(const char *URL)
   int request = 1;
   int i;
 
-  FILE *idfile = fopen(libtest_arg2, "wb");
+  FILE *idfile = NULL;
+  /* Create file with restrictive permissions */
+  {
+    int fd = open(libtest_arg2, O_WRONLY | O_CREAT | O_TRUNC,
+                  S_IRUSR | S_IWUSR);
+    if(fd != -1) {
+      idfile = fdopen(fd, "wb");
+      if(!idfile)
+        close(fd);
+    }
+  }
   if(!idfile) {
     curl_mfprintf(stderr, "couldn't open the Session ID File\n");
     return TEST_ERR_MAJOR_BAD;

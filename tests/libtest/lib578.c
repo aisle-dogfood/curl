@@ -33,11 +33,22 @@ static size_t data_size = CURL_ARRAYSIZE(t578_testdata);
 static int t578_progress_callback(void *clientp, double dltotal, double dlnow,
                                   double ultotal, double ulnow)
 {
-  FILE *moo = fopen(libtest_arg2, "wb");
+  FILE *moo = NULL;
 
   (void)clientp;
   (void)dltotal;
   (void)dlnow;
+
+  /* Create file with restrictive permissions */
+  {
+    int fd = open(libtest_arg2, O_WRONLY | O_CREAT | O_TRUNC,
+                  S_IRUSR | S_IWUSR);
+    if(fd != -1) {
+      moo = fdopen(fd, "wb");
+      if(!moo)
+        close(fd);
+    }
+  }
 
   if(moo) {
     if((size_t)ultotal == data_size && (size_t)ulnow == data_size)

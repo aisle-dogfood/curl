@@ -95,7 +95,10 @@ class LocalClient:
                 if key in os.environ and key not in run_env:
                     run_env[key] = os.environ[key]
         try:
-            with open(self._stdoutfile, 'w') as cout, open(self._stderrfile, 'w') as cerr:
+            # Create files with restrictive permissions (0o600)
+            cout_fd = os.open(self._stdoutfile, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            cerr_fd = os.open(self._stderrfile, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(cout_fd, 'w') as cout, os.fdopen(cerr_fd, 'w') as cerr:
                 p = subprocess.run(myargs, stderr=cerr, stdout=cout,
                                    cwd=self._run_dir, shell=False,
                                    input=None, env=run_env,
