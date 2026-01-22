@@ -1425,16 +1425,42 @@ CURLcode
 curl_mime_data_ccsid(curl_mimepart *part,
                      const char *data, size_t datasize, unsigned int ccsid)
 {
-  char *s = (char *) NULL;
+  char *s;
   CURLcode result;
+  size_t convertedsize;
+  size_t dlen;
+  int convlen;
+
+  s = (char *) NULL;
 
   if(!data)
     return curl_mime_data(part, data, datasize);
-  s = dynconvert(ASCII_CCSID, data, datasize, ccsid);
+
+  /* Handle CURL_ZERO_TERMINATED: pass through to dynconvert and curl_mime_data */
+  if(datasize == CURL_ZERO_TERMINATED) {
+    s = dynconvert(ASCII_CCSID, data, -1, ccsid);
+    if(!s)
+      return CURLE_OUT_OF_MEMORY;
+    result = curl_mime_data(part, s, CURL_ZERO_TERMINATED);
+    free(s);
+    return result;
+  }
+
+  /* For explicit sizes, we need to get the actual converted length */
+  dlen = datasize + 1;
+  dlen *= MAX_CONV_EXPANSION;
+  s = malloc(dlen);
   if(!s)
     return CURLE_OUT_OF_MEMORY;
 
-  result = curl_mime_data(part, s, datasize);
+  convlen = convert(s, dlen, ASCII_CCSID, data, (int)datasize, ccsid);
+  if(convlen < 0) {
+    free(s);
+    return CURLE_OUT_OF_MEMORY;
+  }
+
+  convertedsize = (size_t)convlen;
+  result = curl_mime_data(part, s, convertedsize);
   free(s);
   return result;
 }
