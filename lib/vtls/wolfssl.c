@@ -1671,12 +1671,33 @@ static CURLcode wssl_handshake(struct Curl_cfilter *cf,
 
 #ifdef WOLFSSL_EARLY_DATA
   if(connssl->earlydata_state == ssl_earlydata_sending) {
-    result = wssl_send_earlydata(cf, data);
-    if(result)
-      return result;
+    /* Check if a pinned public key is configured. If so, we must NOT send
+     * early data before verifying the pin, as that would leak request data
+     * if the pin does not match. Reject early data and proceed with normal
+     * handshake instead. */
+#ifndef CURL_DISABLE_PROXY
+    const char *pinned_key = Curl_ssl_cf_is_proxy(cf) ?
+      data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY] :
+      data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#else
+    const char *pinned_key = data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#endif
+    if(pinned_key) {
+      /* Pinned key configured - reject early data to ensure verification
+       * completes before any application data is sent */
+      infof(data, "Rejecting early data due to pinned public key check");
+      connssl->earlydata_state = ssl_earlydata_rejected;
+    }
+    else {
+      result = wssl_send_earlydata(cf, data);
+      if(result)
+        return result;
+      connssl->earlydata_state = ssl_earlydata_sent;
+    }
   }
   DEBUGASSERT((connssl->earlydata_state == ssl_earlydata_none) ||
-              (connssl->earlydata_state == ssl_earlydata_sent));
+              (connssl->earlydata_state == ssl_earlydata_sent) ||
+              (connssl->earlydata_state == ssl_earlydata_rejected));
 #else
   DEBUGASSERT(connssl->earlydata_state == ssl_earlydata_none);
 #endif /* WOLFSSL_EARLY_DATA */
