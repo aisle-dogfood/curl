@@ -263,7 +263,7 @@ $!
 $! When building on a search list, need to do a create to make sure that
 $! the output directory exists, since the clean procedure tries to delete
 $! it.
-$ create/dir 'exedir'/prot=o:rwed
+$ create/dir 'exedir'/prot=(S:RWED,O:RWED,G:RE,W)
 $!
 $! Interpret command-line options.
 $!
