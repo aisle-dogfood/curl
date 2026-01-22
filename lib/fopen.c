@@ -137,9 +137,9 @@ CURLcode Curl_fopen(struct Curl_easy *data, const char *filename,
   result = CURLE_WRITE_ERROR;
 #if (defined(ANDROID) || defined(__ANDROID__)) && \
   (defined(__i386__) || defined(__arm__))
-  fd = open(tempstore, O_WRONLY | O_CREAT | O_EXCL, (mode_t)(0600|sb.st_mode));
+  fd = open(tempstore, O_WRONLY | O_CREAT | O_EXCL, (mode_t)0600);
 #else
-  fd = open(tempstore, O_WRONLY | O_CREAT | O_EXCL, 0600|sb.st_mode);
+  fd = open(tempstore, O_WRONLY | O_CREAT | O_EXCL, 0600);
 #endif
   if(fd == -1)
     goto fail;
