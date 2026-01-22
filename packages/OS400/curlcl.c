@@ -36,10 +36,13 @@
 #define CURLPGM "CURL"
 #endif
 
+/* Maximum command line buffer size. */
+#define CMDLINE_BUFSIZE 5000
+
 /* Variable-length string, with 16-bit length. */
 struct vary2 {
   short len;
-  char  string[5000];
+  char  string[CMDLINE_BUFSIZE];
 };
 
 /* Arguments from CL command. */
@@ -135,6 +138,7 @@ main(int argsc, struct arguments *args)
   int i;
   int exitcode;
   char library[11];
+  size_t cmdline_len;
 
   /* Extract current program library name. */
   for(i = 0; i < 10; i++) {
@@ -147,8 +151,13 @@ main(int argsc, struct arguments *args)
   }
   library[i] = '\0';
 
+  /* Clamp length to prevent out-of-bounds read. */
+  cmdline_len = args->cmdargs->len;
+  if(cmdline_len > CMDLINE_BUFSIZE)
+    cmdline_len = CMDLINE_BUFSIZE;
+
   /* Measure arguments size. */
-  exitcode = parse_command_line(args->cmdargs->string, args->cmdargs->len,
+  exitcode = parse_command_line(args->cmdargs->string, cmdline_len,
                                 &argc, NULL, &argsize, NULL);
 
   if(!exitcode) {
@@ -162,7 +171,7 @@ main(int argsc, struct arguments *args)
       _SYSPTR pgmptr = rslvsp(WLI_PGM, (char *) CURLPGM, library, _AUTH_NONE);
       _LU_Work_Area_T *luwrka = (_LU_Work_Area_T *) _LUWRKA();
 
-      parse_command_line(args->cmdargs->string, args->cmdargs->len,
+      parse_command_line(args->cmdargs->string, cmdline_len,
                          &argc, argv, &argsize, (char *) (argv + argc + 1));
 
       /* Call program. */
