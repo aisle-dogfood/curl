@@ -112,8 +112,8 @@ my $keyfile = abs_path("certs/$cert.key");
 
 my $cmdline="$nghttpx --http2-proxy --backend=$connect ".
     "--backend-keep-alive-timeout=500ms ".
-    "--frontend=\"*,$listenport\" ".
-    "--frontend=\"*,$listenport;quic\" ".
+    "--frontend=\"127.0.0.1,$listenport\" ".
+    "--frontend=\"127.0.0.1,$listenport;quic\" ".
     "--log-level=INFO ".
     "--pid-file=$pidfile ".
     "--errorlog-file=$logfile ".
