@@ -236,6 +236,7 @@ LIB_CFILES =         \
   select.c           \
   sendf.c            \
   setopt.c           \
+  sha1.c             \
   sha256.c           \
   share.c            \
   slist.c            \
@@ -306,6 +307,7 @@ LIB_HFILES =         \
   curl_sasl.h        \
   curl_setup.h       \
   curl_setup_once.h  \
+  curl_sha1.h        \
   curl_sha256.h      \
   curl_sha512_256.h  \
   curl_sspi.h        \

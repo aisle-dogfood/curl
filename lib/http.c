@@ -3339,7 +3339,8 @@ static CURLcode http_header_r(struct Curl_easy *data,
 static CURLcode http_header_s(struct Curl_easy *data,
                               const char *hd, size_t hdlen)
 {
-#if !defined(CURL_DISABLE_COOKIES) || !defined(CURL_DISABLE_HSTS)
+#if !defined(CURL_DISABLE_COOKIES) || !defined(CURL_DISABLE_HSTS) || \
+    !defined(CURL_DISABLE_WEBSOCKETS)
   struct connectdata *conn = data->conn;
   const char *v;
 #else
@@ -3386,6 +3387,36 @@ static CURLcode http_header_s(struct Curl_easy *data,
       infof(data, "Parsed STS header fine (%zu entries)",
             Curl_llist_count(&data->hsts->list));
 #endif
+  }
+#endif
+#ifndef CURL_DISABLE_WEBSOCKETS
+  /* Capture WebSocket-related headers during upgrade */
+  v = HD_VAL(hd, hdlen, "Sec-WebSocket-Accept:");
+  if(v) {
+    char *val = Curl_copy_header_value(hd);
+    if(val) {
+      free(data->state.ws_accept);
+      data->state.ws_accept = val;
+    }
+    return CURLE_OK;
+  }
+  v = HD_VAL(hd, hdlen, "Sec-WebSocket-Protocol:");
+  if(v) {
+    char *val = Curl_copy_header_value(hd);
+    if(val) {
+      free(data->state.ws_protocol);
+      data->state.ws_protocol = val;
+    }
+    return CURLE_OK;
+  }
+  v = HD_VAL(hd, hdlen, "Sec-WebSocket-Extensions:");
+  if(v) {
+    char *val = Curl_copy_header_value(hd);
+    if(val) {
+      free(data->state.ws_extensions);
+      data->state.ws_extensions = val;
+    }
+    return CURLE_OK;
   }
 #endif
 

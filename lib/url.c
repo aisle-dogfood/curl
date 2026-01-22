@@ -295,6 +295,11 @@ CURLcode Curl_close(struct Curl_easy **datap)
 #if !defined(CURL_DISABLE_HTTP) && !defined(CURL_DISABLE_DIGEST_AUTH)
   Curl_http_auth_cleanup_digest(data);
 #endif
+#ifndef CURL_DISABLE_WEBSOCKETS
+  Curl_safefree(data->state.ws_accept);
+  Curl_safefree(data->state.ws_protocol);
+  Curl_safefree(data->state.ws_extensions);
+#endif
   Curl_safefree(data->state.most_recent_ftp_entrypath);
   Curl_safefree(data->info.contenttype);
   Curl_safefree(data->info.wouldredirect);
@@ -3934,6 +3939,14 @@ CURLcode Curl_init_do(struct Curl_easy *data, struct connectdata *conn)
   if(data->req.no_body)
     /* in HTTP lingo, no body means using the HEAD request... */
     data->state.httpreq = HTTPREQ_HEAD;
+
+#ifndef CURL_DISABLE_WEBSOCKETS
+  /* Clear WebSocket upgrade headers from any previous requests */
+  Curl_safefree(data->state.ws_accept);
+  Curl_safefree(data->state.ws_protocol);
+  Curl_safefree(data->state.ws_extensions);
+  data->state.ws_key[0] = '\0';
+#endif
 
   result = Curl_req_start(&data->req, data);
   if(!result) {
