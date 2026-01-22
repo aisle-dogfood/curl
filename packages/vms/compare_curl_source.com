@@ -135,7 +135,7 @@ $   if update_file
 $   then
 $       if f$search("src_root1:[000000]curl.dir") .eqs. ""
 $       then
-$           create/dir/prot=o:rwed src_root1:[curl]
+$           create/dir/prot=(S:RWED,O:RWED,G:RE,W) src_root1:[curl]
 $       endif
 $   endif
 $ endif
@@ -151,7 +151,7 @@ $   if update_file
 $   then
 $       if f$search("vms_root1:[000000]curl.dir") .eqs. ""
 $       then
-$           create/dir/prot=o:rwed vms_root1:[curl]
+$           create/dir/prot=(S:RWED,O:RWED,G:RE,W) vms_root1:[curl]
 $       endif
 $   endif
 $ endif
