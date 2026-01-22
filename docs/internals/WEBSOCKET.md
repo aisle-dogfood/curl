@@ -98,8 +98,6 @@ Ideas:
 
 ## Future work
 
-- Verify the Sec-WebSocket-Accept response. It requires a sha-1 function.
-- Verify Sec-WebSocket-Extensions and Sec-WebSocket-Protocol in the response
 - Consider a `curl_ws_poll()`
 - Make sure WebSocket code paths are fuzzed
 - Add client-side PING interval

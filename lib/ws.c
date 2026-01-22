@@ -41,6 +41,8 @@
 #include "select.h"
 #include "curlx/nonblock.h"
 #include "curlx/strparse.h"
+#include "curl_sha1.h"
+#include "http.h"
 
 /* The last 3 #include files should be in this order */
 #include "curl_printf.h"
@@ -1259,6 +1261,9 @@ CURLcode Curl_ws_request(struct Curl_easy *data, struct dynbuf *req)
     return CURLE_FAILED_INIT;
   }
   strcpy(keyval, randstr);
+  /* Store the key for later verification of Sec-WebSocket-Accept */
+  DEBUGASSERT(randlen < sizeof(data->state.ws_key));
+  strcpy(data->state.ws_key, randstr);
   free(randstr);
   for(i = 0; !result && (i < CURL_ARRAYSIZE(heads)); i++) {
     if(!Curl_checkheaders(data, heads[i].name, strlen(heads[i].name))) {
@@ -1279,6 +1284,56 @@ static void ws_conn_dtor(void *key, size_t klen, void *entry)
   Curl_bufq_free(&ws->recvbuf);
   Curl_bufq_free(&ws->sendbuf);
   free(ws);
+}
+
+/*
+ * Verify Sec-WebSocket-Accept header value according to RFC 6455 Section 1.3.
+ * The accept value must be the base64-encoded SHA-1 hash of the concatenation
+ * of the client's Sec-WebSocket-Key and the GUID
+ * "258EAFA5-E914-47DA-95CA-C5AB0DC85B11".
+ */
+static CURLcode ws_verify_accept(struct Curl_easy *data,
+                                 const char *accept_header)
+{
+  unsigned char hash[CURL_SHA1_DIGEST_LENGTH];
+  char *expected_accept = NULL;
+  size_t accept_len;
+  CURLcode result;
+  const char *ws_guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+  size_t concat_len;
+  char *concat_str;
+
+  /* Concatenate Sec-WebSocket-Key + GUID */
+  concat_len = strlen(data->state.ws_key) + strlen(ws_guid);
+  concat_str = malloc(concat_len + 1);
+  if(!concat_str)
+    return CURLE_OUT_OF_MEMORY;
+
+  memcpy(concat_str, data->state.ws_key, strlen(data->state.ws_key));
+  memcpy(concat_str + strlen(data->state.ws_key), ws_guid,
+         strlen(ws_guid) + 1);
+
+  /* Compute SHA-1 hash */
+  result = Curl_sha1it(hash, (const unsigned char *)concat_str, concat_len);
+  free(concat_str);
+  if(result)
+    return result;
+
+  /* Base64 encode the hash */
+  result = curlx_base64_encode((const char *)hash, CURL_SHA1_DIGEST_LENGTH,
+                               &expected_accept, &accept_len);
+  if(result)
+    return result;
+
+  /* Compare with received Sec-WebSocket-Accept header */
+  if(!accept_header || strcmp(expected_accept, accept_header) != 0) {
+    failf(data, "WebSocket upgrade failed: Sec-WebSocket-Accept mismatch");
+    free(expected_accept);
+    return CURLE_HTTP_RETURNED_ERROR;
+  }
+
+  free(expected_accept);
+  return CURLE_OK;
 }
 
 /*
@@ -1334,18 +1389,39 @@ CURLcode Curl_ws_accept(struct Curl_easy *data,
      |Sec-WebSocket-Key| header field concatenated with
      the string "258EAFA5-E914-47DA-95CA-C5AB0DC85B11".
   */
+  result = ws_verify_accept(data, data->state.ws_accept);
+  if(result)
+    goto out;
 
   /* If the response includes a |Sec-WebSocket-Extensions| header field and
      this header field indicates the use of an extension that was not present
      in the client's handshake (the server has indicated an extension not
      requested by the client), the client MUST Fail the WebSocket Connection.
   */
+  if(data->state.ws_extensions) {
+    /* We currently do not request any extensions, so reject any
+     * extensions offered by the server per RFC 6455 Section 4.1.
+     * When extension support is added, proper validation will be needed. */
+    failf(data, "WebSocket upgrade failed: "
+          "Sec-WebSocket-Extensions not requested");
+    result = CURLE_HTTP_RETURNED_ERROR;
+    goto out;
+  }
 
   /* If the response includes a |Sec-WebSocket-Protocol| header field
      and this header field indicates the use of a subprotocol that was
      not present in the client's handshake (the server has indicated a
      subprotocol not requested by the client), the client MUST Fail
      the WebSocket Connection. */
+  if(data->state.ws_protocol) {
+    /* We currently do not request any subprotocol, so reject any
+     * subprotocol offered by the server per RFC 6455 Section 4.1.
+     * When subprotocol support is added, proper validation will be needed. */
+    failf(data, "WebSocket upgrade failed: "
+          "Sec-WebSocket-Protocol not requested");
+    result = CURLE_HTTP_RETURNED_ERROR;
+    goto out;
+  }
 
   infof(data, "[WS] Received 101, switch to WebSocket");
 

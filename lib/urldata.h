@@ -1182,6 +1182,12 @@ struct UrlState {
   BIT(http_hd_upgrade); /* Added HTTP header Upgrade: */
   BIT(http_hd_h2_settings); /* Added HTTP header H2Settings: */
 #endif
+#ifndef CURL_DISABLE_WEBSOCKETS
+  char ws_key[29]; /* base64-encoded Sec-WebSocket-Key (24 chars + null) */
+  char *ws_accept; /* Sec-WebSocket-Accept header from server */
+  char *ws_protocol; /* Sec-WebSocket-Protocol header from server */
+  char *ws_extensions; /* Sec-WebSocket-Extensions header from server */
+#endif
 };
 
 /*
