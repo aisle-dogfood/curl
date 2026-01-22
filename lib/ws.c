@@ -41,6 +41,7 @@
 #include "select.h"
 #include "curlx/nonblock.h"
 #include "curlx/strparse.h"
+#include "curlx/timeval.h"
 
 /* The last 3 #include files should be in this order */
 #include "curl_printf.h"
@@ -111,6 +112,10 @@ struct ws_encoder {
 /* Control frames are allowed up to 125 characters, rfc6455, ch. 5.5 */
 #define WS_MAX_CNTRL_LEN    125
 
+/* Rate limit auto-PONG responses to avoid reflection attacks:
+ * minimum interval between auto-PONGs in milliseconds */
+#define WS_AUTOPONG_RATELIMIT_MS  1000
+
 struct ws_cntrl_frame {
   unsigned int type;
   size_t payload_len;
@@ -128,6 +133,7 @@ struct websocket {
   struct curl_ws_frame recvframe;  /* the current WS FRAME received */
   struct ws_cntrl_frame pending; /* a control frame pending to be sent */
   size_t sendbuf_payload; /* number of payload bytes in sendbuf */
+  struct curltime last_autopong; /* timestamp of last auto-PONG sent */
 };
 
 
@@ -623,6 +629,39 @@ static CURLcode ws_enc_send(struct Curl_easy *data,
 static CURLcode ws_enc_add_pending(struct Curl_easy *data,
                                    struct websocket *ws);
 
+/* Check if auto-PONG is allowed based on rate limiting.
+ * Returns TRUE if PONG should be sent, FALSE if rate-limited. */
+static bool ws_autopong_allowed(struct Curl_easy *data,
+                                struct websocket *ws)
+{
+  struct curltime now = curlx_now();
+  timediff_t elapsed;
+
+  /* If last_autopong is zero (first PONG or zero-initialized),
+   * allow the PONG and set timestamp */
+  if(ws->last_autopong.tv_sec == 0 && ws->last_autopong.tv_usec == 0) {
+    ws->last_autopong = now;
+    return TRUE;
+  }
+
+  /* Calculate time since last auto-PONG */
+  elapsed = curlx_timediff(now, ws->last_autopong);
+
+  /* Enforce rate limit: allow PONG only if enough time has passed */
+  if(elapsed >= WS_AUTOPONG_RATELIMIT_MS) {
+    ws->last_autopong = now;
+    CURL_TRC_WS(data, "auto-PONG allowed (elapsed: %" FMT_TIMEDIFF_T " ms)",
+                elapsed);
+    return TRUE;
+  }
+
+  /* Rate limited */
+  CURL_TRC_WS(data, "auto-PONG rate-limited (elapsed: %" FMT_TIMEDIFF_T
+              " ms < %" FMT_TIMEDIFF_T " ms)", elapsed,
+              (timediff_t)WS_AUTOPONG_RATELIMIT_MS);
+  return FALSE;
+}
+
 static CURLcode ws_enc_add_cntrl(struct Curl_easy *data,
                                  struct websocket *ws,
                                  const unsigned char *payload,
@@ -667,12 +706,14 @@ static CURLcode ws_cw_dec_next(const unsigned char *buf, size_t buflen,
 
   if(auto_pong && (frame_flags & CURLWS_PING) && !remain) {
     /* auto-respond to PINGs, only works for single-frame payloads atm */
-    CURL_TRC_WS(data, "auto PONG to [PING payload=%" FMT_OFF_T
-                "/%" FMT_OFF_T "]", payload_offset, payload_len);
-    /* send back the exact same content as a PONG */
-    result = ws_enc_add_cntrl(data, ws, buf, buflen, CURLWS_PONG);
-    if(result)
-      return result;
+    if(ws_autopong_allowed(data, ws)) {
+      CURL_TRC_WS(data, "auto PONG to [PING payload=%" FMT_OFF_T
+                  "/%" FMT_OFF_T "]", payload_offset, payload_len);
+      /* send back the exact same content as a PONG */
+      result = ws_enc_add_cntrl(data, ws, buf, buflen, CURLWS_PONG);
+      if(result)
+        return result;
+    }
   }
   else if(buflen || !remain) {
     /* forward the decoded frame to the next client writer. */
@@ -1457,13 +1498,19 @@ static CURLcode ws_client_collect(const unsigned char *buf, size_t buflen,
 
   if(auto_pong && (frame_flags & CURLWS_PING) && !remain) {
     /* auto-respond to PINGs, only works for single-frame payloads atm */
-    CURL_TRC_WS(data, "auto PONG to [PING payload=%" FMT_OFF_T
-                "/%" FMT_OFF_T "]", payload_offset, payload_len);
-    /* send back the exact same content as a PONG */
-    result = ws_enc_add_cntrl(ctx->data, ctx->ws, buf, buflen, CURLWS_PONG);
-    if(result)
-      return result;
-    *pnwritten = buflen;
+    if(ws_autopong_allowed(ctx->data, ctx->ws)) {
+      CURL_TRC_WS(data, "auto PONG to [PING payload=%" FMT_OFF_T
+                  "/%" FMT_OFF_T "]", payload_offset, payload_len);
+      /* send back the exact same content as a PONG */
+      result = ws_enc_add_cntrl(ctx->data, ctx->ws, buf, buflen, CURLWS_PONG);
+      if(result)
+        return result;
+      *pnwritten = buflen;
+    }
+    else {
+      /* Rate-limited: skip auto-PONG but mark as written to avoid blocking */
+      *pnwritten = buflen;
+    }
   }
   else {
     size_t write_len;
