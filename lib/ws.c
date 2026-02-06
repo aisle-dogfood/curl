@@ -41,6 +41,18 @@
 #include "select.h"
 #include "curlx/nonblock.h"
 #include "curlx/strparse.h"
+#include "headers.h"
+
+#ifdef USE_OPENSSL
+#include <openssl/evp.h>
+#include <openssl/sha.h>
+#elif defined(USE_MBEDTLS)
+#include <mbedtls/sha1.h>
+#elif defined(USE_GNUTLS)
+#include <gnutls/crypto.h>
+#elif defined(USE_WOLFSSL)
+#include <wolfssl/wolfcrypt/sha.h>
+#endif
 
 /* The last 3 #include files should be in this order */
 #include "curl_printf.h"
@@ -128,6 +140,7 @@ struct websocket {
   struct curl_ws_frame recvframe;  /* the current WS FRAME received */
   struct ws_cntrl_frame pending; /* a control frame pending to be sent */
   size_t sendbuf_payload; /* number of payload bytes in sendbuf */
+  char *ws_key;           /* the Sec-WebSocket-Key sent in handshake */
 };
 
 
@@ -1223,6 +1236,7 @@ CURLcode Curl_ws_request(struct Curl_easy *data, struct dynbuf *req)
   size_t randlen;
   char keyval[40];
   struct SingleRequest *k = &data->req;
+  struct websocket *ws;
   struct wsfield heads[]= {
     {
       /* The request MUST contain an |Upgrade| header field whose value
@@ -1260,6 +1274,25 @@ CURLcode Curl_ws_request(struct Curl_easy *data, struct dynbuf *req)
   }
   strcpy(keyval, randstr);
   free(randstr);
+  
+  /* Store the WebSocket key for later validation */
+  ws = Curl_conn_meta_get(data->conn, CURL_META_PROTO_WS_CONN);
+  if(!ws) {
+    ws = calloc(1, sizeof(*ws));
+    if(!ws)
+      return CURLE_OUT_OF_MEMORY;
+    result = Curl_conn_meta_set(data->conn, CURL_META_PROTO_WS_CONN,
+                                ws, ws_conn_dtor);
+    if(result) {
+      free(ws);
+      return result;
+    }
+  }
+  
+  ws->ws_key = strdup(keyval);
+  if(!ws->ws_key)
+    return CURLE_OUT_OF_MEMORY;
+  
   for(i = 0; !result && (i < CURL_ARRAYSIZE(heads)); i++) {
     if(!Curl_checkheaders(data, heads[i].name, strlen(heads[i].name))) {
       result = curlx_dyn_addf(req, "%s: %s\r\n", heads[i].name,
@@ -1278,7 +1311,76 @@ static void ws_conn_dtor(void *key, size_t klen, void *entry)
   (void)klen;
   Curl_bufq_free(&ws->recvbuf);
   Curl_bufq_free(&ws->sendbuf);
+  free(ws->ws_key);
   free(ws);
+}
+
+/* Compute the expected Sec-WebSocket-Accept value for the given key */
+static CURLcode ws_compute_accept_value(const char *key, char **accept_value)
+{
+  const char *magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+  char *concat_str;
+  size_t concat_len;
+  unsigned char sha1_hash[20];
+  char *b64_result;
+  size_t b64_len;
+  CURLcode result;
+
+  if(!key || !accept_value)
+    return CURLE_BAD_FUNCTION_ARGUMENT;
+
+  /* Concatenate key with magic string */
+  concat_len = strlen(key) + strlen(magic);
+  concat_str = malloc(concat_len + 1);
+  if(!concat_str)
+    return CURLE_OUT_OF_MEMORY;
+  
+  strcpy(concat_str, key);
+  strcat(concat_str, magic);
+
+#ifdef USE_OPENSSL
+  /* Compute SHA-1 hash using OpenSSL */
+  if(!SHA1((unsigned char *)concat_str, concat_len, sha1_hash)) {
+    free(concat_str);
+    return CURLE_SSL_CIPHER;
+  }
+#elif defined(USE_MBEDTLS)
+  /* Compute SHA-1 hash using mbedTLS */
+  if(mbedtls_sha1((unsigned char *)concat_str, concat_len, sha1_hash) != 0) {
+    free(concat_str);
+    return CURLE_SSL_CIPHER;
+  }
+#elif defined(USE_GNUTLS)
+  /* Compute SHA-1 hash using GnuTLS */
+  if(gnutls_hash_fast(GNUTLS_DIG_SHA1, concat_str, concat_len, sha1_hash) != 0) {
+    free(concat_str);
+    return CURLE_SSL_CIPHER;
+  }
+#elif defined(USE_WOLFSSL)
+  /* Compute SHA-1 hash using WolfSSL */
+  wc_Sha sha;
+  if(wc_InitSha(&sha) != 0 ||
+     wc_ShaUpdate(&sha, (unsigned char *)concat_str, concat_len) != 0 ||
+     wc_ShaFinal(&sha, sha1_hash) != 0) {
+    free(concat_str);
+    return CURLE_SSL_CIPHER;
+  }
+#else
+  /* For builds without crypto support, we cannot validate the handshake */
+  /* This is a critical security feature, so we fail if SHA-1 is not available */
+  free(concat_str);
+  return CURLE_NOT_BUILT_IN;
+#endif
+
+  free(concat_str);
+
+  /* Base64 encode the hash */
+  result = curlx_base64_encode((char *)sha1_hash, 20, &b64_result, &b64_len);
+  if(result)
+    return result;
+
+  *accept_value = b64_result;
+  return CURLE_OK;
 }
 
 /*
@@ -1318,6 +1420,7 @@ CURLcode Curl_ws_accept(struct Curl_easy *data,
                     BUFQ_OPT_SOFT_LIMIT);
     ws_dec_init(&ws->dec);
     ws_enc_init(&ws->enc);
+    ws->ws_key = NULL; /* Initialize to NULL for new websocket structs */
     result = Curl_conn_meta_set(data->conn, CURL_META_PROTO_WS_CONN,
                                 ws, ws_conn_dtor);
     if(result)
@@ -1334,18 +1437,72 @@ CURLcode Curl_ws_accept(struct Curl_easy *data,
      |Sec-WebSocket-Key| header field concatenated with
      the string "258EAFA5-E914-47DA-95CA-C5AB0DC85B11".
   */
+  if(ws->ws_key) {
+    struct curl_header *accept_header;
+    char *expected_accept = NULL;
+    
+    /* Get the Sec-WebSocket-Accept header from the response */
+    if(curl_easy_header(data, "Sec-WebSocket-Accept", 0, CURLH_HEADER, -1,
+                        &accept_header) == CURLHE_OK) {
+      /* Compute the expected accept value */
+      result = ws_compute_accept_value(ws->ws_key, &expected_accept);
+      if(result)
+        goto out;
+      
+      /* Compare the received value with the expected value */
+      if(!expected_accept || strcmp(accept_header->value, expected_accept)) {
+        failf(data, "Invalid Sec-WebSocket-Accept response header");
+        free(expected_accept);
+        result = CURLE_HTTP_RETURNED_ERROR;
+        goto out;
+      }
+      free(expected_accept);
+    }
+    else {
+      failf(data, "Missing Sec-WebSocket-Accept response header");
+      result = CURLE_HTTP_RETURNED_ERROR;
+      goto out;
+    }
+  }
+  else {
+    /* No stored key means we can't validate the handshake properly */
+    infof(data, "[WS] Warning: Cannot validate Sec-WebSocket-Accept "
+          "(no stored key)");
+  }
 
   /* If the response includes a |Sec-WebSocket-Extensions| header field and
      this header field indicates the use of an extension that was not present
      in the client's handshake (the server has indicated an extension not
      requested by the client), the client MUST Fail the WebSocket Connection.
   */
+  {
+    struct curl_header *ext_header;
+    if(curl_easy_header(data, "Sec-WebSocket-Extensions", 0, CURLH_HEADER, -1,
+                        &ext_header) == CURLHE_OK) {
+      /* For now, reject any extensions since we don't support any */
+      failf(data, "Unsolicited Sec-WebSocket-Extensions in response: %s",
+            ext_header->value);
+      result = CURLE_HTTP_RETURNED_ERROR;
+      goto out;
+    }
+  }
 
   /* If the response includes a |Sec-WebSocket-Protocol| header field
      and this header field indicates the use of a subprotocol that was
      not present in the client's handshake (the server has indicated a
      subprotocol not requested by the client), the client MUST Fail
      the WebSocket Connection. */
+  {
+    struct curl_header *proto_header;
+    if(curl_easy_header(data, "Sec-WebSocket-Protocol", 0, CURLH_HEADER, -1,
+                        &proto_header) == CURLHE_OK) {
+      /* For now, reject any protocols since we don't support any */
+      failf(data, "Unsolicited Sec-WebSocket-Protocol in response: %s",
+            proto_header->value);
+      result = CURLE_HTTP_RETURNED_ERROR;
+      goto out;
+    }
+  }
 
   infof(data, "[WS] Received 101, switch to WebSocket");
 
