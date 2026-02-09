@@ -145,19 +145,21 @@ canonicalize_path()
 
         R=
         IFSSAVE="${IFS}"
-        IFS="/"
 
-        for C in ${P}
-        do      IFS="${IFSSAVE}"
-                case "${C}" in
-                .)      ;;
-                ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
-                        ;;
-                ?*)     R="${R}${C}/"
-                        ;;
-                *)      ;;
-                esac
-        done
+        while IFS="/" read -ra PATH_PARTS
+        do
+                for C in "${PATH_PARTS[@]}"
+                do
+                        case "${C}" in
+                        .)      ;;
+                        ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
+                                ;;
+                        ?*)     R="${R}${C}/"
+                                ;;
+                        *)      ;;
+                        esac
+                done
+        done <<< "${P}"
 
         IFS="${IFSSAVE}"
         echo "/$(expr "${R}" : '^\(.*\)/')"
