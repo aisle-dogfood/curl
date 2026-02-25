@@ -144,11 +144,15 @@ canonicalize_path()
         fi
 
         R=
-        IFSSAVE="${IFS}"
+        OLDIFS="${IFS}"
         IFS="/"
+        # Set positional parameters to path components
+        # This expansion happens immediately, so IFS can be restored right after
+        set -- ${P}
+        IFS="${OLDIFS}"
 
-        for C in ${P}
-        do      IFS="${IFSSAVE}"
+        for C in "$@"
+        do
                 case "${C}" in
                 .)      ;;
                 ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
@@ -159,7 +163,6 @@ canonicalize_path()
                 esac
         done
 
-        IFS="${IFSSAVE}"
         echo "/$(expr "${R}" : '^\(.*\)/')"
 }
 
