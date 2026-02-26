@@ -138,29 +138,28 @@ action_needed()
 canonicalize_path()
 
 {
-        if expr "${1}" : '^/' > /dev/null
-        then    P="${1}"
-        else    P="$(pwd)/${1}"
-        fi
+        (
+                if expr "${1}" : '^/' > /dev/null
+                then    P="${1}"
+                else    P="$(pwd)/${1}"
+                fi
 
-        R=
-        IFSSAVE="${IFS}"
-        IFS="/"
+                R=
+                IFS="/"
 
-        for C in ${P}
-        do      IFS="${IFSSAVE}"
-                case "${C}" in
-                .)      ;;
-                ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
-                        ;;
-                ?*)     R="${R}${C}/"
-                        ;;
-                *)      ;;
-                esac
-        done
+                for C in ${P}
+                do      case "${C}" in
+                        .)      ;;
+                        ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
+                                ;;
+                        ?*)     R="${R}${C}/"
+                                ;;
+                        *)      ;;
+                        esac
+                done
 
-        IFS="${IFSSAVE}"
-        echo "/$(expr "${R}" : '^\(.*\)/')"
+                echo "/$(expr "${R}" : '^\(.*\)/')"
+        )
 }
 
 
