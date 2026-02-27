@@ -144,12 +144,17 @@ canonicalize_path()
         fi
 
         R=
-        IFSSAVE="${IFS}"
-        IFS="/"
 
-        for C in ${P}
-        do      IFS="${IFSSAVE}"
-                case "${C}" in
+        # Use a subshell to localize IFS modification
+        set -f  # Disable globbing
+        OLDIFS="${IFS}"
+        IFS="/"
+        set -- ${P}
+        IFS="${OLDIFS}"
+        set +f  # Re-enable globbing
+
+        for C in "$@"
+        do      case "${C}" in
                 .)      ;;
                 ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
                         ;;
@@ -158,8 +163,6 @@ canonicalize_path()
                 *)      ;;
                 esac
         done
-
-        IFS="${IFSSAVE}"
         echo "/$(expr "${R}" : '^\(.*\)/')"
 }
 
