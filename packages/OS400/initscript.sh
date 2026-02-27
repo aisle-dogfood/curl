@@ -144,11 +144,19 @@ canonicalize_path()
         fi
 
         R=
-        IFSSAVE="${IFS}"
-        IFS="/"
-
-        for C in ${P}
-        do      IFS="${IFSSAVE}"
+        # Use 'set --' to split path components without modifying global IFS
+        # The IFS change is localized to the command substitution subshell
+        COMPONENTS="$(
+                IFS="/"
+                set -- ${P}
+                for C in "$@"
+                do
+                        printf '%s\n' "${C}"
+                done
+        )"
+        # Process each component using here-document to avoid subshell from pipeline
+        while IFS= read -r C
+        do
                 case "${C}" in
                 .)      ;;
                 ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
@@ -157,9 +165,9 @@ canonicalize_path()
                         ;;
                 *)      ;;
                 esac
-        done
-
-        IFS="${IFSSAVE}"
+        done <<EOF
+${COMPONENTS}
+EOF
         echo "/$(expr "${R}" : '^\(.*\)/')"
 }
 
