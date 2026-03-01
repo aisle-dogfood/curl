@@ -279,7 +279,7 @@ class NghttpxFwd(Nghttpx):
         super().initial_start()
 
         def startup(ports: Dict[str, int]) -> bool:
-            self._port = ports['h2proxys']
+            self._port = ports['h2proxies']
             if self.start():
                 self.env.update_ports(ports)
                 return True
@@ -287,7 +287,7 @@ class NghttpxFwd(Nghttpx):
             self._port = 0
             return False
 
-        return alloc_ports_and_do({'h2proxys': socket.SOCK_STREAM},
+        return alloc_ports_and_do({'h2proxies': socket.SOCK_STREAM},
                                   startup, self.env.gen_root, max_tries=3)
 
     def start(self, wait_live=True):

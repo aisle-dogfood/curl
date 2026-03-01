@@ -541,11 +541,11 @@ class CurlClient:
             return os.makedirs(path)
 
     def get_proxy_args(self, proto: str = 'http/1.1',
-                       proxys: bool = True, tunnel: bool = False,
+                       proxies: bool = True, tunnel: bool = False,
                        use_ip: bool = False):
         proxy_name = self._server_addr if use_ip else self.env.proxy_domain
-        if proxys:
-            pport = self.env.pts_port(proto) if tunnel else self.env.proxys_port
+        if proxies:
+            pport = self.env.pts_port(proto) if tunnel else self.env.proxies_port
             xargs = [
                 '--proxy', f'https://{proxy_name}:{pport}/',
                 '--resolve', f'{proxy_name}:{pport}:{self._server_addr}',

@@ -464,7 +464,7 @@ class Httpd:
                 '',
             ])
             conf.extend([  # https forward proxy
-                f'<VirtualHost *:{self.ports["proxys"]}>',
+                f'<VirtualHost *:{self.ports["proxies"]}>',
                 f'    ServerName {proxy_domain}',
                 '    Protocols h2 http/1.1',
                 '    SSLEngine on',

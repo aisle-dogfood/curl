@@ -643,7 +643,7 @@ class Env:
         return self.CONFIG.ports['proxy']
 
     @property
-    def proxys_port(self) -> int:
+    def proxies_port(self) -> int:
         return self.CONFIG.ports['proxys']
 
     @property
@@ -655,7 +655,7 @@ class Env:
         return self.CONFIG.ports['ftps']
 
     @property
-    def h2proxys_port(self) -> int:
+    def h2proxies_port(self) -> int:
         return self.CONFIG.ports['h2proxys']
 
     def pts_port(self, proto: str = 'http/1.1') -> int:
