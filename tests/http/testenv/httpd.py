@@ -68,7 +68,7 @@ class Httpd:
         'https': socket.SOCK_STREAM,
         'https-tcp-only': socket.SOCK_STREAM,
         'proxy': socket.SOCK_STREAM,
-        'proxys': socket.SOCK_STREAM,
+        'proxies': socket.SOCK_STREAM,
     }
 
     def __init__(self, env: Env):
@@ -464,7 +464,7 @@ class Httpd:
                 '',
             ])
             conf.extend([  # https forward proxy
-                f'<VirtualHost *:{self.ports["proxys"]}>',
+                f'<VirtualHost *:{self.ports["proxies"]}>',
                 f'    ServerName {proxy_domain}',
                 '    Protocols h2 http/1.1',
                 '    SSLEngine on',
