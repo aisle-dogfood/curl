@@ -57,7 +57,7 @@ class TestProxyAuth:
         curl = CurlClient(env=env)
         url = f'http://localhost:{env.http_port}/data.json'
         r = curl.http_download(urls=[url], alpn_proto='http/1.1', with_stats=True,
-                               extra_args=curl.get_proxy_args(proxys=False))
+                               extra_args=curl.get_proxy_args(proxies=False))
         r.check_response(count=1, http_status=407)
 
     # download via http: proxy (no tunnel), auth
@@ -65,7 +65,7 @@ class TestProxyAuth:
         self.httpd_configure(env, httpd)
         curl = CurlClient(env=env)
         url = f'http://localhost:{env.http_port}/data.json'
-        xargs = curl.get_proxy_args(proxys=False)
+        xargs = curl.get_proxy_args(proxies=False)
         xargs.extend(['--proxy-user', 'proxy:proxy'])
         r = curl.http_download(urls=[url], alpn_proto='http/1.1', with_stats=True,
                                extra_args=xargs)
@@ -74,11 +74,11 @@ class TestProxyAuth:
     @pytest.mark.skipif(condition=not Env.curl_has_feature('HTTPS-proxy'),
                         reason='curl lacks HTTPS-proxy support')
     @pytest.mark.skipif(condition=not Env.have_nghttpx(), reason="no nghttpx available")
-    def test_13_03_proxys_no_auth(self, env: Env, httpd, configures_httpd, nghttpx_fwd):
+    def test_13_03_proxies_no_auth(self, env: Env, httpd, configures_httpd, nghttpx_fwd):
         self.httpd_configure(env, httpd)
         curl = CurlClient(env=env)
         url = f'http://localhost:{env.http_port}/data.json'
-        xargs = curl.get_proxy_args(proxys=True)
+        xargs = curl.get_proxy_args(proxies=True)
         r = curl.http_download(urls=[url], alpn_proto='http/1.1', with_stats=True,
                                extra_args=xargs)
         r.check_response(count=1, http_status=407)
@@ -86,11 +86,11 @@ class TestProxyAuth:
     @pytest.mark.skipif(condition=not Env.curl_has_feature('HTTPS-proxy'),
                         reason='curl lacks HTTPS-proxy support')
     @pytest.mark.skipif(condition=not Env.have_nghttpx(), reason="no nghttpx available")
-    def test_13_04_proxys_auth(self, env: Env, httpd, configures_httpd, nghttpx_fwd):
+    def test_13_04_proxies_auth(self, env: Env, httpd, configures_httpd, nghttpx_fwd):
         self.httpd_configure(env, httpd)
         curl = CurlClient(env=env)
         url = f'http://localhost:{env.http_port}/data.json'
-        xargs = curl.get_proxy_args(proxys=True)
+        xargs = curl.get_proxy_args(proxies=True)
         xargs.extend(['--proxy-user', 'proxy:proxy'])
         r = curl.http_download(urls=[url], alpn_proto='http/1.1', with_stats=True,
                                extra_args=xargs)
@@ -100,7 +100,7 @@ class TestProxyAuth:
         self.httpd_configure(env, httpd)
         curl = CurlClient(env=env)
         url = f'http://localhost:{env.http_port}/data.json'
-        xargs = curl.get_proxy_args(proxys=False, tunnel=True)
+        xargs = curl.get_proxy_args(proxies=False, tunnel=True)
         r = curl.http_download(urls=[url], alpn_proto='http/1.1', with_stats=True,
                                extra_args=xargs)
         # expect "COULD_NOT_CONNECT"
@@ -110,7 +110,7 @@ class TestProxyAuth:
         self.httpd_configure(env, httpd)
         curl = CurlClient(env=env)
         url = f'http://localhost:{env.http_port}/data.json'
-        xargs = curl.get_proxy_args(proxys=False, tunnel=True)
+        xargs = curl.get_proxy_args(proxies=False, tunnel=True)
         xargs.extend(['--proxy-user', 'proxy:proxy'])
         r = curl.http_download(urls=[url], alpn_proto='http/1.1', with_stats=True,
                                extra_args=xargs)
@@ -128,7 +128,7 @@ class TestProxyAuth:
             pytest.skip('only supported with nghttp2')
         curl = CurlClient(env=env)
         url = f'https://localhost:{env.https_port}/data.json'
-        xargs = curl.get_proxy_args(proxys=True, tunnel=True, proto=tunnel)
+        xargs = curl.get_proxy_args(proxies=True, tunnel=True, proto=tunnel)
         r = curl.http_download(urls=[url], alpn_proto=proto, with_stats=True,
                                extra_args=xargs)
         # expect "COULD_NOT_CONNECT"
@@ -147,7 +147,7 @@ class TestProxyAuth:
             pytest.skip('only supported with nghttp2')
         curl = CurlClient(env=env)
         url = f'https://localhost:{env.https_port}/data.json'
-        xargs = curl.get_proxy_args(proxys=True, tunnel=True, proto=tunnel)
+        xargs = curl.get_proxy_args(proxies=True, tunnel=True, proto=tunnel)
         xargs.extend(['--proxy-user', 'proxy:proxy'])
         r = curl.http_download(urls=[url], alpn_proto=proto, with_stats=True,
                                extra_args=xargs)

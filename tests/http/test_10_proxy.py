@@ -65,14 +65,14 @@ class TestProxy:
         curl = CurlClient(env=env)
         url = f'http://localhost:{env.http_port}/data.json'
         r = curl.http_download(urls=[url], alpn_proto='http/1.1', with_stats=True,
-                               extra_args=curl.get_proxy_args(proxys=False))
+                               extra_args=curl.get_proxy_args(proxies=False))
         r.check_response(count=1, http_status=200)
 
     # download via https: proxy (no tunnel)
     @pytest.mark.skipif(condition=not Env.curl_has_feature('HTTPS-proxy'),
                         reason='curl lacks HTTPS-proxy support')
     @pytest.mark.parametrize("proto", ['http/1.1', 'h2'])
-    def test_10_02_proxys_down(self, env: Env, httpd, proto):
+    def test_10_02_proxies_down(self, env: Env, httpd, proto):
         if proto == 'h2' and not env.curl_uses_lib('nghttp2'):
             pytest.skip('only supported with nghttp2')
         curl = CurlClient(env=env)
@@ -93,8 +93,8 @@ class TestProxy:
     ])
     @pytest.mark.skipif(condition=not Env.have_nghttpx(),
                         reason="no nghttpx available")
-    def test_10_02_proxys_up(self, env: Env, httpd, nghttpx, proto,
-                             fname, fcount):
+    def test_10_02_proxies_up(self, env: Env, httpd, nghttpx, proto,
+                              fname, fcount):
         if proto == 'h2' and not env.curl_uses_lib('nghttp2'):
             pytest.skip('only supported with nghttp2')
         count = fcount
@@ -115,7 +115,7 @@ class TestProxy:
     def test_10_03_proxytunnel_http(self, env: Env, httpd, nghttpx_fwd):
         curl = CurlClient(env=env)
         url = f'http://localhost:{env.http_port}/data.json'
-        xargs = curl.get_proxy_args(proxys=False, tunnel=True)
+        xargs = curl.get_proxy_args(proxies=False, tunnel=True)
         r = curl.http_download(urls=[url], alpn_proto='http/1.1', with_stats=True,
                                extra_args=xargs)
         r.check_response(count=1, http_status=200)
@@ -138,7 +138,7 @@ class TestProxy:
     def test_10_05_proxytunnel_http(self, env: Env, httpd, nghttpx_fwd, proto):
         curl = CurlClient(env=env)
         url = f'https://localhost:{env.https_port}/data.json'
-        xargs = curl.get_proxy_args(proxys=False, tunnel=True)
+        xargs = curl.get_proxy_args(proxies=False, tunnel=True)
         r = curl.http_download(urls=[url], alpn_proto=proto, with_stats=True,
                                extra_args=xargs)
         r.check_response(count=1, http_status=200,
@@ -364,7 +364,7 @@ class TestProxy:
     @pytest.mark.skipif(condition=not Env.curl_has_feature('HTTPS-proxy'),
                         reason='curl lacks HTTPS-proxy support')
     @pytest.mark.parametrize("proto", ['http/1.1', 'h2'])
-    def test_10_14_proxys_ip_addr(self, env: Env, httpd, proto):
+    def test_10_14_proxies_ip_addr(self, env: Env, httpd, proto):
         if proto == 'h2' and not env.curl_uses_lib('nghttp2'):
             pytest.skip('only supported with nghttp2')
         curl = CurlClient(env=env)
