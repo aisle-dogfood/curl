@@ -644,7 +644,7 @@ class Env:
 
     @property
     def proxies_port(self) -> int:
-        return self.CONFIG.ports['proxys']
+        return self.CONFIG.ports['proxies']
 
     @property
     def ftp_port(self) -> int:
@@ -656,11 +656,11 @@ class Env:
 
     @property
     def h2proxies_port(self) -> int:
-        return self.CONFIG.ports['h2proxys']
+        return self.CONFIG.ports['h2proxies']
 
     def pts_port(self, proto: str = 'http/1.1') -> int:
         # proxy tunnel port
-        return self.CONFIG.ports['h2proxys' if proto == 'h2' else 'proxys']
+        return self.CONFIG.ports['h2proxies' if proto == 'h2' else 'proxies']
 
     @property
     def caddy(self) -> str:

@@ -68,7 +68,7 @@ class Httpd:
         'https': socket.SOCK_STREAM,
         'https-tcp-only': socket.SOCK_STREAM,
         'proxy': socket.SOCK_STREAM,
-        'proxys': socket.SOCK_STREAM,
+        'proxies': socket.SOCK_STREAM,
     }
 
     def __init__(self, env: Env):
