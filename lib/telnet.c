@@ -944,28 +944,40 @@ static void suboption(struct Curl_easy *data, struct TELNET *tn)
   printsub(data, '<', (unsigned char *)tn->subbuffer, CURL_SB_LEN(tn) + 2);
   switch(CURL_SB_GET(tn)) {
     case CURL_TELOPT_TTYPE:
-      len = strlen(tn->subopt_ttype) + 4 + 2;
-      msnprintf((char *)temp, sizeof(temp),
-                "%c%c%c%c%s%c%c", CURL_IAC, CURL_SB, CURL_TELOPT_TTYPE,
-                CURL_TELQUAL_IS, tn->subopt_ttype, CURL_IAC, CURL_SE);
-      bytes_written = swrite(conn->sock[FIRSTSOCKET], temp, len);
-      if(bytes_written < 0) {
-        err = SOCKERRNO;
-        failf(data,"Sending data failed (%d)",err);
+      {
+        int result = msnprintf((char *)temp, sizeof(temp),
+                               "%c%c%c%c%s%c%c", CURL_IAC, CURL_SB,
+                               CURL_TELOPT_TTYPE,
+                               CURL_TELQUAL_IS, tn->subopt_ttype, CURL_IAC,
+                               CURL_SE);
+        /* Clamp to actual buffer size to prevent reading past buffer end */
+        len = (result > 0 && (size_t)result < sizeof(temp)) ?
+              (size_t)result : sizeof(temp) - 1;
+        bytes_written = swrite(conn->sock[FIRSTSOCKET], temp, len);
+        if(bytes_written < 0) {
+          err = SOCKERRNO;
+          failf(data,"Sending data failed (%d)",err);
+        }
+        printsub(data, '>', &temp[2], len-2);
       }
-      printsub(data, '>', &temp[2], len-2);
       break;
     case CURL_TELOPT_XDISPLOC:
-      len = strlen(tn->subopt_xdisploc) + 4 + 2;
-      msnprintf((char *)temp, sizeof(temp),
-                "%c%c%c%c%s%c%c", CURL_IAC, CURL_SB, CURL_TELOPT_XDISPLOC,
-                CURL_TELQUAL_IS, tn->subopt_xdisploc, CURL_IAC, CURL_SE);
-      bytes_written = swrite(conn->sock[FIRSTSOCKET], temp, len);
-      if(bytes_written < 0) {
-        err = SOCKERRNO;
-        failf(data,"Sending data failed (%d)",err);
+      {
+        int result = msnprintf((char *)temp, sizeof(temp),
+                               "%c%c%c%c%s%c%c", CURL_IAC, CURL_SB,
+                               CURL_TELOPT_XDISPLOC,
+                               CURL_TELQUAL_IS, tn->subopt_xdisploc, CURL_IAC,
+                               CURL_SE);
+        /* Clamp to actual buffer size to prevent reading past buffer end */
+        len = (result > 0 && (size_t)result < sizeof(temp)) ?
+              (size_t)result : sizeof(temp) - 1;
+        bytes_written = swrite(conn->sock[FIRSTSOCKET], temp, len);
+        if(bytes_written < 0) {
+          err = SOCKERRNO;
+          failf(data,"Sending data failed (%d)",err);
+        }
+        printsub(data, '>', &temp[2], len-2);
       }
-      printsub(data, '>', &temp[2], len-2);
       break;
     case CURL_TELOPT_NEW_ENVIRON:
       msnprintf((char *)temp, sizeof(temp),
