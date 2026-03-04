@@ -180,6 +180,13 @@ static CURLcode mqtt_setup_conn(struct Curl_easy *data,
   return CURLE_OK;
 }
 
+/* Helper to redact credentials in a buffer for debug logging */
+static void redact_credentials(char *buf, size_t start, size_t len)
+{
+  if(len > 0)
+    memset(&buf[start + 2], '*', len); /* +2 to skip length bytes */
+}
+
 static CURLcode mqtt_send(struct Curl_easy *data,
                           const char *buf, size_t len)
 {
@@ -195,6 +202,65 @@ static CURLcode mqtt_send(struct Curl_easy *data,
     return result;
   mq->lastTime = curlx_now();
   Curl_debug(data, CURLINFO_HEADER_OUT, buf, (size_t)n);
+  if(len != n) {
+    size_t nsend = len - n;
+    if(curlx_dyn_len(&mq->sendbuf)) {
+      DEBUGASSERT(curlx_dyn_len(&mq->sendbuf) >= nsend);
+      result = curlx_dyn_tail(&mq->sendbuf, nsend); /* keep this much */
+    }
+    else {
+      result = curlx_dyn_addn(&mq->sendbuf, &buf[n], nsend);
+    }
+  }
+  else
+    curlx_dyn_reset(&mq->sendbuf);
+  return result;
+}
+
+/* Send MQTT packet with credentials redacted in debug output */
+static CURLcode mqtt_send_connect(struct Curl_easy *data,
+                                  const char *buf, size_t len,
+                                  size_t user_start, size_t user_len,
+                                  size_t pwd_start, size_t pwd_len)
+{
+  size_t n;
+  CURLcode result;
+  struct MQTT *mq = Curl_meta_get(data, CURL_META_MQTT_EASY);
+  char *debug_buf = NULL;
+
+  if(!mq)
+    return CURLE_FAILED_INIT;
+
+  result = Curl_xfer_send(data, buf, len, FALSE, &n);
+  if(result)
+    return result;
+  mq->lastTime = curlx_now();
+
+  /* Create a redacted copy for debug output if credentials are present */
+  if((user_len > 0 || pwd_len > 0) && n > 0) {
+    debug_buf = malloc(n);
+    if(debug_buf) {
+      memcpy(debug_buf, buf, n);
+      /* Redact username and password in the debug copy */
+      if(user_len > 0 && user_start + 2 + user_len <= n)
+        redact_credentials(debug_buf, user_start, user_len);
+      if(pwd_len > 0 && pwd_start + 2 + pwd_len <= n)
+        redact_credentials(debug_buf, pwd_start, pwd_len);
+      Curl_debug(data, CURLINFO_HEADER_OUT, debug_buf, (size_t)n);
+      free(debug_buf);
+    }
+    else {
+      /* If allocation fails, skip debug output rather than expose
+         credentials */
+      Curl_debug(data, CURLINFO_HEADER_OUT,
+                 "[CONNECT packet - credentials redacted]\n", 42);
+    }
+  }
+  else {
+    /* No credentials to redact */
+    Curl_debug(data, CURLINFO_HEADER_OUT, buf, (size_t)n);
+  }
+
   if(len != n) {
     size_t nsend = len - n;
     if(curlx_dyn_len(&mq->sendbuf)) {
@@ -398,7 +464,8 @@ static CURLcode mqtt_connect(struct Curl_easy *data)
   }
 
   if(!result)
-    result = mqtt_send(data, packet, packetlen);
+    result = mqtt_send_connect(data, packet, packetlen,
+                               start_user, ulen, start_pwd, plen);
 
 end:
   if(packet)
