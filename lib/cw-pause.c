@@ -44,6 +44,8 @@
 #define CW_PAUSE_BUF_CHUNK         (16 * 1024)
 /* when content decoding, write data in chunks */
 #define CW_PAUSE_DEC_WRITE_CHUNK   (4096)
+/* maximum total pause buffer size to prevent unbounded memory growth */
+#define CW_PAUSE_MAX_BUFFER        (2 * 1024 * 1024)
 
 struct cw_pause_buf {
   struct cw_pause_buf *next;
@@ -202,10 +204,21 @@ static CURLcode cw_pause_write(struct Curl_easy *data,
 
   do {
     size_t nwritten = 0;
+    size_t max_write;
+    size_t write_len;
+    /* Enforce hard limit on total paused buffer size to prevent unbounded
+     * memory growth from untrusted network input */
+    if(ctx->buf_total >= CW_PAUSE_MAX_BUFFER) {
+      failf(data, "Paused data buffer limit (%zu bytes) exceeded",
+            CW_PAUSE_MAX_BUFFER);
+      return CURLE_RECV_ERROR;
+    }
+    max_write = CW_PAUSE_MAX_BUFFER - ctx->buf_total;
+    write_len = CURLMIN(blen, max_write);
     if(ctx->buf && (ctx->buf->type == type) && (type & CLIENTWRITE_BODY)) {
       /* same type and body, append to current buffer which has a soft
-       * limit and should take everything up to OOM. */
-      result = Curl_bufq_cwrite(&ctx->buf->b, buf, blen, &nwritten);
+       * limit, but enforce our hard limit */
+      result = Curl_bufq_cwrite(&ctx->buf->b, buf, write_len, &nwritten);
     }
     else {
       /* Need a new buf, type changed */
@@ -214,7 +227,7 @@ static CURLcode cw_pause_write(struct Curl_easy *data,
         return CURLE_OUT_OF_MEMORY;
       cwbuf->next = ctx->buf;
       ctx->buf = cwbuf;
-      result = Curl_bufq_cwrite(&ctx->buf->b, buf, blen, &nwritten);
+      result = Curl_bufq_cwrite(&ctx->buf->b, buf, write_len, &nwritten);
     }
     CURL_TRC_WRITE(data, "[PAUSE] buffer %zu more bytes of type %x, "
                    "total=%zu -> %d", nwritten, type, ctx->buf_total + wlen,
