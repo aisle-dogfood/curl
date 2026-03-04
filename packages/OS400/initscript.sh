@@ -145,22 +145,23 @@ canonicalize_path()
 
         R=
         IFSSAVE="${IFS}"
-        IFS="/"
 
-        for C in ${P}
-        do      IFS="${IFSSAVE}"
-                case "${C}" in
-                .)      ;;
-                ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
-                        ;;
-                ?*)     R="${R}${C}/"
-                        ;;
-                *)      ;;
-                esac
-        done
+        (
+                IFS="/"
+                for C in ${P}
+                do      IFS="${IFSSAVE}"
+                        case "${C}" in
+                        .)      ;;
+                        ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
+                                ;;
+                        ?*)     R="${R}${C}/"
+                                ;;
+                        *)      ;;
+                        esac
+                done
 
-        IFS="${IFSSAVE}"
-        echo "/$(expr "${R}" : '^\(.*\)/')"
+                echo "/$(expr "${R}" : '^\(.*\)/')"
+        )
 }
 
 
