@@ -178,6 +178,7 @@ static CURLcode smtp_continue_auth(struct Curl_easy *data, const char *mech,
 static CURLcode smtp_cancel_auth(struct Curl_easy *data, const char *mech);
 static CURLcode smtp_get_message(struct Curl_easy *data, struct bufref *out);
 static CURLcode cr_eob_add(struct Curl_easy *data);
+static CURLcode smtp_validate_no_ctrl(const char *str);
 
 /*
  * SMTP protocol handler.
@@ -648,6 +649,12 @@ static CURLcode smtp_perform_command(struct Curl_easy *data,
       free(address);
     }
     else {
+      /* Validate that the recipient data does not contain control characters
+         to prevent CRLF injection */
+      result = smtp_validate_no_ctrl(smtp->rcpt->data);
+      if(result)
+        return result;
+
       /* Establish whether we should report that we support SMTPUTF8 for EXPN
          commands to the server as per RFC-6531 sect. 3.1 point 6 */
       utf8 = (smtpc->utf8_supported) && (!strcmp(smtp->custom, "EXPN"));
@@ -1841,6 +1848,34 @@ static CURLcode smtp_parse_custom_request(struct Curl_easy *data,
 
 /***********************************************************************
  *
+ * smtp_validate_no_ctrl()
+ *
+ * Validates that a string does not contain control characters to
+ * prevent CRLF injection attacks in SMTP commands.
+ *
+ * Parameters:
+ *
+ * str [in] - The string to validate
+ *
+ * Returns CURLE_OK if the string is valid, CURLE_BAD_FUNCTION_ARGUMENT
+ * if it contains control characters.
+ */
+static CURLcode smtp_validate_no_ctrl(const char *str)
+{
+  if(str) {
+    const char *p = str;
+    while(*p) {
+      if(ISCNTRL(*p)) {
+        return CURLE_BAD_FUNCTION_ARGUMENT;
+      }
+      p++;
+    }
+  }
+  return CURLE_OK;
+}
+
+/***********************************************************************
+ *
  * smtp_parse_address()
  *
  * Parse the fully qualified mailbox address into a local address part and the
@@ -1879,10 +1914,17 @@ static CURLcode smtp_parse_address(const char *fqma, char **address,
   CURLcode result = CURLE_OK;
   size_t length;
   char *addressend;
+  char *dup;
+
+  /* Validate that the mailbox address does not contain control characters
+     to prevent CRLF injection */
+  result = smtp_validate_no_ctrl(fqma);
+  if(result)
+    return result;
 
   /* Duplicate the fully qualified email address so we can manipulate it,
      ensuring it does not contain the delimiters if specified */
-  char *dup = strdup(fqma[0] == '<' ? fqma + 1  : fqma);
+  dup = strdup(fqma[0] == '<' ? fqma + 1  : fqma);
   if(!dup)
     return CURLE_OUT_OF_MEMORY;
 
