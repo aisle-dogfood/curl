@@ -86,10 +86,9 @@ static char *dirslash(const char *path)
 
 /*
  * Curl_fopen() opens a file for writing with a temp name, to be renamed
- * to the final name when completed. If there is an existing file using this
- * name at the time of the open, this function will clone the mode from that
- * file. if 'tempname' is non-NULL, it needs a rename after the file is
- * written.
+ * to the final name when completed. The temporary file is created with
+ * restrictive permissions (0600) to protect sensitive data. If 'tempname'
+ * is non-NULL, it needs a rename after the file is written.
  */
 CURLcode Curl_fopen(struct Curl_easy *data, const char *filename,
                     FILE **fh, char **tempname)
@@ -137,9 +136,9 @@ CURLcode Curl_fopen(struct Curl_easy *data, const char *filename,
   result = CURLE_WRITE_ERROR;
 #if (defined(ANDROID) || defined(__ANDROID__)) && \
   (defined(__i386__) || defined(__arm__))
-  fd = open(tempstore, O_WRONLY | O_CREAT | O_EXCL, (mode_t)(0600|sb.st_mode));
+  fd = open(tempstore, O_WRONLY | O_CREAT | O_EXCL, (mode_t)0600);
 #else
-  fd = open(tempstore, O_WRONLY | O_CREAT | O_EXCL, 0600|sb.st_mode);
+  fd = open(tempstore, O_WRONLY | O_CREAT | O_EXCL, 0600);
 #endif
   if(fd == -1)
     goto fail;
