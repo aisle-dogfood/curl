@@ -107,6 +107,7 @@ struct cw_out_ctx {
   struct cw_out_buf *buf;
   BIT(paused);
   BIT(errored);
+  BIT(soft_limit_warned);
 };
 
 static CURLcode cw_out_write(struct Curl_easy *data,
@@ -141,6 +142,8 @@ static void cw_out_bufs_free(struct cw_out_ctx *ctx)
     cw_out_buf_free(ctx->buf);
     ctx->buf = next;
   }
+  /* Reset soft limit warning flag when buffers are cleared */
+  ctx->soft_limit_warned = FALSE;
 }
 
 static size_t cw_out_bufs_len(struct cw_out_ctx *ctx)
@@ -355,6 +358,10 @@ static CURLcode cw_out_flush_chain(struct cw_out_ctx *ctx,
     cw_out_buf_free(cwbuf);
     *pcwbuf = NULL;
   }
+  /* Reset soft limit warning if buffer drops below soft watermark */
+  if(ctx->soft_limit_warned && cw_out_bufs_len(ctx) <= DYN_PAUSE_BUFFER_SOFT) {
+    ctx->soft_limit_warned = FALSE;
+  }
   return CURLE_OK;
 }
 
@@ -363,11 +370,24 @@ static CURLcode cw_out_append(struct cw_out_ctx *ctx,
                               cw_out_type otype,
                               const char *buf, size_t blen)
 {
+  size_t current_len = cw_out_bufs_len(ctx);
+  size_t new_len = current_len + blen;
+
   CURL_TRC_WRITE(data, "[OUT] paused, buffering %zu more bytes (%zu/%d)",
-                 blen, cw_out_bufs_len(ctx), DYN_PAUSE_BUFFER);
-  if(cw_out_bufs_len(ctx) + blen > DYN_PAUSE_BUFFER) {
+                 blen, current_len, DYN_PAUSE_BUFFER);
+
+  /* Check hard cap first */
+  if(new_len > DYN_PAUSE_BUFFER) {
     failf(data, "pause buffer not large enough -> CURLE_TOO_LARGE");
     return CURLE_TOO_LARGE;
+  }
+
+  /* Check soft watermark and issue warning if exceeded */
+  if(new_len > DYN_PAUSE_BUFFER_SOFT && !ctx->soft_limit_warned) {
+    infof(data, "Pause buffer exceeds soft limit (%zu/%d bytes buffered). "
+          "Consider unpausing to avoid hitting hard limit.",
+          new_len, DYN_PAUSE_BUFFER);
+    ctx->soft_limit_warned = TRUE;
   }
 
   /* if we do not have a buffer, or it is of another type, make a new one.
