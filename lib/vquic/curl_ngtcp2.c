@@ -2394,20 +2394,33 @@ static CURLcode cf_ngtcp2_on_session_reuse(struct Curl_cfilter *cf,
     CURL_TRC_CF(data, cf, "no 0RTT transport parameters, no early data, ");
   }
   else {
-    int rv;
-    rv = ngtcp2_conn_decode_and_set_0rtt_transport_params(
-      ctx->qconn, (const uint8_t *)scs->quic_tp, scs->quic_tp_len);
-    if(rv)
-      CURL_TRC_CF(data, cf, "no early data, failed to set 0RTT transport "
-                  "parameters: %s", ngtcp2_strerror(rv));
+    const char *pinnedpubkey;
+#ifndef CURL_DISABLE_PROXY
+    pinnedpubkey = Curl_ssl_cf_is_proxy(cf) ?
+      data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY] :
+      data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#else
+    pinnedpubkey = data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#endif
+    if(pinnedpubkey) {
+      CURL_TRC_CF(data, cf, "Pinned public key set, disabled early data");
+    }
     else {
-      infof(data, "SSL session allows %zu bytes of early data, "
-            "reusing ALPN '%s'", ctx->earlydata_max, scs->alpn);
-      result = init_ngh3_conn(cf, data);
-      if(!result) {
-        ctx->use_earlydata = TRUE;
-        cf->connected = TRUE;
-        *do_early_data = TRUE;
+      int rv;
+      rv = ngtcp2_conn_decode_and_set_0rtt_transport_params(
+        ctx->qconn, (const uint8_t *)scs->quic_tp, scs->quic_tp_len);
+      if(rv)
+        CURL_TRC_CF(data, cf, "no early data, failed to set 0RTT transport "
+                    "parameters: %s", ngtcp2_strerror(rv));
+      else {
+        infof(data, "SSL session allows %zu bytes of early data, "
+              "reusing ALPN '%s'", ctx->earlydata_max, scs->alpn);
+        result = init_ngh3_conn(cf, data);
+        if(!result) {
+          ctx->use_earlydata = TRUE;
+          cf->connected = TRUE;
+          *do_early_data = TRUE;
+        }
       }
     }
   }

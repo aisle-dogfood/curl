@@ -1071,6 +1071,7 @@ static CURLcode gtls_on_session_reuse(struct Curl_cfilter *cf,
   struct gtls_ssl_backend_data *backend =
     (struct gtls_ssl_backend_data *)connssl->backend;
   CURLcode result = CURLE_OK;
+  const char *pinnedpubkey;
 
   *do_early_data = FALSE;
   connssl->earlydata_max =
@@ -1083,14 +1084,26 @@ static CURLcode gtls_on_session_reuse(struct Curl_cfilter *cf,
     CURL_TRC_CF(data, cf, "SSL session has different ALPN, no early data");
   }
   else {
-    infof(data, "SSL session allows %zu bytes of early data, "
-          "reusing ALPN '%s'", connssl->earlydata_max, scs->alpn);
-    connssl->earlydata_state = ssl_earlydata_await;
-    connssl->state = ssl_connection_deferred;
-    result = Curl_alpn_set_negotiated(cf, data, connssl,
-                    (const unsigned char *)scs->alpn,
-                    scs->alpn ? strlen(scs->alpn) : 0);
-    *do_early_data = !result;
+#ifndef CURL_DISABLE_PROXY
+    pinnedpubkey = Curl_ssl_cf_is_proxy(cf) ?
+      data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY] :
+      data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#else
+    pinnedpubkey = data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#endif
+    if(pinnedpubkey) {
+      CURL_TRC_CF(data, cf, "Pinned public key set, disabled early data");
+    }
+    else {
+      infof(data, "SSL session allows %zu bytes of early data, "
+            "reusing ALPN '%s'", connssl->earlydata_max, scs->alpn);
+      connssl->earlydata_state = ssl_earlydata_await;
+      connssl->state = ssl_connection_deferred;
+      result = Curl_alpn_set_negotiated(cf, data, connssl,
+                      (const unsigned char *)scs->alpn,
+                      scs->alpn ? strlen(scs->alpn) : 0);
+      *do_early_data = !result;
+    }
   }
   return result;
 }
