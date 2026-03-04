@@ -23,6 +23,19 @@
  ***************************************************************************/
 
 #include "tool_setup.h"
+
+#ifdef HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
+
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+
+#ifdef HAVE_IO_H
+#include <io.h>
+#endif
+
 #include "tool_stderr.h"
 #include "tool_msgs.h"
 
@@ -39,6 +52,7 @@ void tool_init_stderr(void)
 void tool_set_stderr_file(const char *filename)
 {
   FILE *fp;
+  int fd = -1;
 
   if(!filename)
     return;
@@ -48,11 +62,36 @@ void tool_set_stderr_file(const char *filename)
     return;
   }
 
-  /* precheck that filename is accessible to lessen the chance that the
-     subsequent freopen will fail. */
-  fp = fopen(filename, FOPEN_WRITETEXT);
-  if(!fp) {
+  /* Create file with restrictive permissions (0600) to prevent information
+     leakage in multi-user environments. This protects sensitive data that
+     may be written to stderr (credentials, headers, verbose output). */
+#ifdef _WIN32
+  /* On Windows, use _open with _S_IREAD | _S_IWRITE for user-only access.
+     Note: Windows ACLs provide the real security; these permission bits
+     primarily affect file mode for compatibility. */
+  fd = _open(filename, _O_WRONLY | _O_CREAT | _O_TRUNC | CURL_O_BINARY,
+             _S_IREAD | _S_IWRITE);
+#else
+  /* On Unix-like systems, use open with mode 0600 for user read/write only.
+     This ensures the file is created with restrictive permissions regardless
+     of the process umask. */
+  fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | CURL_O_BINARY, 0600);
+#endif
+
+  if(fd == -1) {
     warnf("Warning: Failed to open %s", filename);
+    return;
+  }
+
+  /* Convert file descriptor to FILE* */
+  fp = fdopen(fd, FOPEN_WRITETEXT);
+  if(!fp) {
+    warnf("Warning: Failed to fdopen %s", filename);
+#ifdef _WIN32
+    _close(fd);
+#else
+    close(fd);
+#endif
     return;
   }
   fclose(fp);
