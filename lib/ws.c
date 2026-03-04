@@ -111,6 +111,11 @@ struct ws_encoder {
 /* Control frames are allowed up to 125 characters, rfc6455, ch. 5.5 */
 #define WS_MAX_CNTRL_LEN    125
 
+/* Rate limiting for auto-PONG responses to prevent PING flooding:
+ * Allow up to WS_MAX_AUTO_PONGS per WS_AUTO_PONG_WINDOW_MS window */
+#define WS_AUTO_PONG_WINDOW_MS  1000  /* 1 second window */
+#define WS_MAX_AUTO_PONGS       10    /* max PONGs per window */
+
 struct ws_cntrl_frame {
   unsigned int type;
   size_t payload_len;
@@ -128,6 +133,8 @@ struct websocket {
   struct curl_ws_frame recvframe;  /* the current WS FRAME received */
   struct ws_cntrl_frame pending; /* a control frame pending to be sent */
   size_t sendbuf_payload; /* number of payload bytes in sendbuf */
+  struct curltime last_auto_pong; /* timestamp of last auto PONG sent */
+  unsigned int auto_pong_count; /* PONGs sent in current window */
 };
 
 
@@ -667,12 +674,45 @@ static CURLcode ws_cw_dec_next(const unsigned char *buf, size_t buflen,
 
   if(auto_pong && (frame_flags & CURLWS_PING) && !remain) {
     /* auto-respond to PINGs, only works for single-frame payloads atm */
-    CURL_TRC_WS(data, "auto PONG to [PING payload=%" FMT_OFF_T
-                "/%" FMT_OFF_T "]", payload_offset, payload_len);
-    /* send back the exact same content as a PONG */
-    result = ws_enc_add_cntrl(data, ws, buf, buflen, CURLWS_PONG);
-    if(result)
-      return result;
+    struct curltime now = curlx_now();
+    timediff_t elapsed_ms = 0;
+    bool rate_limit_ok = FALSE;
+
+    /* Calculate time since last auto PONG */
+    if(ws->last_auto_pong.tv_sec > 0 || ws->last_auto_pong.tv_usec > 0) {
+      elapsed_ms = curlx_timediff(now, ws->last_auto_pong);
+    }
+    else {
+      /* First auto PONG ever, allow it */
+      elapsed_ms = WS_AUTO_PONG_WINDOW_MS + 1;
+    }
+
+    /* Reset counter if window has passed */
+    if(elapsed_ms >= WS_AUTO_PONG_WINDOW_MS) {
+      ws->auto_pong_count = 0;
+      ws->last_auto_pong = now;
+      rate_limit_ok = TRUE;
+    }
+    /* Check if we're within the limit in the current window */
+    else if(ws->auto_pong_count < WS_MAX_AUTO_PONGS) {
+      rate_limit_ok = TRUE;
+    }
+
+    if(rate_limit_ok) {
+      CURL_TRC_WS(data, "auto PONG to [PING payload=%" FMT_OFF_T
+                  "/%" FMT_OFF_T "]", payload_offset, payload_len);
+      /* send back the exact same content as a PONG */
+      result = ws_enc_add_cntrl(data, ws, buf, buflen, CURLWS_PONG);
+      if(result)
+        return result;
+      ws->auto_pong_count++;
+    }
+    else {
+      /* Rate limit exceeded, drop the PING without responding */
+      CURL_TRC_WS(data, "auto PONG rate limit exceeded, dropping PING "
+                  "[payload=%" FMT_OFF_T "/%" FMT_OFF_T "]",
+                  payload_offset, payload_len);
+    }
   }
   else if(buflen || !remain) {
     /* forward the decoded frame to the next client writer. */
@@ -1327,6 +1367,9 @@ CURLcode Curl_ws_accept(struct Curl_easy *data,
     Curl_bufq_reset(&ws->recvbuf);
     ws_dec_reset(&ws->dec);
     ws_enc_reset(&ws->enc);
+    /* Reset rate limiting state */
+    memset(&ws->last_auto_pong, 0, sizeof(ws->last_auto_pong));
+    ws->auto_pong_count = 0;
   }
   /* Verify the Sec-WebSocket-Accept response.
 
@@ -1457,13 +1500,48 @@ static CURLcode ws_client_collect(const unsigned char *buf, size_t buflen,
 
   if(auto_pong && (frame_flags & CURLWS_PING) && !remain) {
     /* auto-respond to PINGs, only works for single-frame payloads atm */
-    CURL_TRC_WS(data, "auto PONG to [PING payload=%" FMT_OFF_T
-                "/%" FMT_OFF_T "]", payload_offset, payload_len);
-    /* send back the exact same content as a PONG */
-    result = ws_enc_add_cntrl(ctx->data, ctx->ws, buf, buflen, CURLWS_PONG);
-    if(result)
-      return result;
-    *pnwritten = buflen;
+    struct curltime now = curlx_now();
+    timediff_t elapsed_ms = 0;
+    bool rate_limit_ok = FALSE;
+
+    /* Calculate time since last auto PONG */
+    if(ctx->ws->last_auto_pong.tv_sec > 0 ||
+       ctx->ws->last_auto_pong.tv_usec > 0) {
+      elapsed_ms = curlx_timediff(now, ctx->ws->last_auto_pong);
+    }
+    else {
+      /* First auto PONG ever, allow it */
+      elapsed_ms = WS_AUTO_PONG_WINDOW_MS + 1;
+    }
+
+    /* Reset counter if window has passed */
+    if(elapsed_ms >= WS_AUTO_PONG_WINDOW_MS) {
+      ctx->ws->auto_pong_count = 0;
+      ctx->ws->last_auto_pong = now;
+      rate_limit_ok = TRUE;
+    }
+    /* Check if we're within the limit in the current window */
+    else if(ctx->ws->auto_pong_count < WS_MAX_AUTO_PONGS) {
+      rate_limit_ok = TRUE;
+    }
+
+    if(rate_limit_ok) {
+      CURL_TRC_WS(data, "auto PONG to [PING payload=%" FMT_OFF_T
+                  "/%" FMT_OFF_T "]", payload_offset, payload_len);
+      /* send back the exact same content as a PONG */
+      result = ws_enc_add_cntrl(ctx->data, ctx->ws, buf, buflen, CURLWS_PONG);
+      if(result)
+        return result;
+      ctx->ws->auto_pong_count++;
+      *pnwritten = buflen;
+    }
+    else {
+      /* Rate limit exceeded, drop the PING without responding */
+      CURL_TRC_WS(data, "auto PONG rate limit exceeded, dropping PING "
+                  "[payload=%" FMT_OFF_T "/%" FMT_OFF_T "]",
+                  payload_offset, payload_len);
+      *pnwritten = buflen;
+    }
   }
   else {
     size_t write_len;
