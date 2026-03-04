@@ -84,6 +84,9 @@ libcurl saves SSL secrets into the given filename. Using those SSL secrets,
 other tools (such as Wireshark) can decrypt the SSL communication and
 analyze/view the traffic.
 
+This environment variable is ignored when libcurl is running in a privileged
+context (setuid/setgid) to prevent potential security issues.
+
 These secrets and this file might be sensitive. Users are advised to take
 precautions so that they are not stolen or otherwise inadvertently revealed.
 

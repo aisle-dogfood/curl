@@ -261,6 +261,15 @@
 /* Define to 1 if you have the `geteuid' function. */
 #cmakedefine HAVE_GETEUID 1
 
+/* Define to 1 if you have the `getuid' function. */
+#cmakedefine HAVE_GETUID 1
+
+/* Define to 1 if you have the `getegid' function. */
+#cmakedefine HAVE_GETEGID 1
+
+/* Define to 1 if you have the `getgid' function. */
+#cmakedefine HAVE_GETGID 1
+
 /* Define to 1 if you have the `getppid' function. */
 #cmakedefine HAVE_GETPPID 1
 

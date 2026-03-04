@@ -4217,13 +4217,16 @@ AC_CHECK_FUNCS([\
   accept4 \
   eventfd \
   fnmatch \
+  getegid \
   geteuid \
+  getgid \
   getpass_r \
   getppid \
   getpwuid \
   getpwuid_r \
   getrlimit \
   gettimeofday \
+  getuid \
   mach_absolute_time \
   pipe \
   pipe2 \

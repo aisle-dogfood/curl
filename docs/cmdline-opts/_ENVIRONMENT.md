@@ -109,6 +109,9 @@ TLS traffic in real time using network analyzing tools such as Wireshark. This
 works with the following TLS backends: OpenSSL, LibreSSL (TLS 1.2 max),
 BoringSSL, GnuTLS, wolfSSL and Rustls.
 
+This environment variable is ignored when curl is running in a privileged
+context (setuid/setgid) to prevent potential security issues.
+
 ## `USERPROFILE <directory>`
 On Windows, this variable is used when trying to find the home directory. If
 the other, primary, variables are all unset. If set, curl uses the path

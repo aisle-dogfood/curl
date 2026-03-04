@@ -75,6 +75,15 @@
 /* Define if you have the `geteuid' function. */
 #define HAVE_GETEUID
 
+/* Define if you have the `getuid' function. */
+#define HAVE_GETUID
+
+/* Define if you have the `getegid' function. */
+#define HAVE_GETEGID
+
+/* Define if you have the `getgid' function. */
+#define HAVE_GETGID
+
 /* Define if you have the `gethostname' function. */
 #define HAVE_GETHOSTNAME
 
