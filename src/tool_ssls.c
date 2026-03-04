@@ -23,6 +23,11 @@
  ***************************************************************************/
 #include "tool_setup.h"
 
+#ifdef HAVE_FCNTL_H
+/* for open() */
+#include <fcntl.h>
+#endif
+
 #include "tool_cfgable.h"
 #include "tool_cb_dbg.h"
 #include "tool_msgs.h"
@@ -32,6 +37,13 @@
 
 /* The maximum line length for an ecoded session ticket */
 #define MAX_SSLS_LINE (64 * 1024)
+
+/* Secure file permissions for SSL session file (owner read/write only) */
+#ifdef _WIN32
+#define SSL_SESSION_MODE S_IREAD | S_IWRITE
+#else
+#define SSL_SESSION_MODE S_IRUSR | S_IWUSR
+#endif
 
 
 static CURLcode tool_ssls_easy(struct OperationConfig *config,
@@ -188,9 +200,30 @@ CURLcode tool_ssls_save(struct OperationConfig *config,
   struct tool_ssls_ctx ctx;
   CURL *easy = NULL;
   CURLcode r = CURLE_OK;
+  int fd = -1;
 
   ctx.exported = 0;
-  ctx.fp = fopen(filename, FOPEN_WRITETEXT);
+  ctx.fp = NULL;
+
+  /* Create file with secure permissions (owner read/write only) to protect
+     sensitive TLS session material */
+  do {
+    fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC | CURL_O_BINARY,
+              SSL_SESSION_MODE);
+    /* Keep retrying if interrupted */
+    /* !checksrc! disable ERRNOVAR 1 */
+  } while(fd == -1 && errno == EINTR);
+
+  if(fd != -1) {
+#ifdef _WIN32
+    ctx.fp = fdopen(fd, "wt");
+#else
+    ctx.fp = fdopen(fd, "w");
+#endif
+    if(!ctx.fp)
+      close(fd);
+  }
+
   if(!ctx.fp) {
     warnf("Warning: Failed to create SSL session file %s",
           filename);
