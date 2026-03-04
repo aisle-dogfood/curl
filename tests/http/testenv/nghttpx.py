@@ -239,10 +239,10 @@ class NghttpxQuic(Nghttpx):
         creds = self.env.get_credentials(self._cred_name)
         assert creds  # convince pytype this isn't None
         self._loaded_cred_name = self._cred_name
-        args = [self._cmd, f'--frontend=*,{self._port};tls']
+        args = [self._cmd, f'--frontend=127.0.0.1,{self._port};tls']
         if self.supports_h3():
             args.extend([
-                f'--frontend=*,{self.env.h3_port};quic',
+                f'--frontend=127.0.0.1,{self.env.h3_port};quic',
                 '--frontend-quic-early-data',
             ])
         args.extend([
@@ -301,7 +301,7 @@ class NghttpxFwd(Nghttpx):
         args = [
             self._cmd,
             '--http2-proxy',
-            f'--frontend=*,{self._port}',
+            f'--frontend=127.0.0.1,{self._port}',
             f'--backend=127.0.0.1,{self.env.proxy_port}',
             '--log-level=ERROR',
             f'--pid-file={self._pid_file}',
@@ -343,3 +343,4 @@ class NghttpxFwd(Nghttpx):
             time.sleep(.1)
         log.error(f"Server still not responding after {timeout}")
         return False
+n False
