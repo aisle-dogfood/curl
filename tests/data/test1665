@@ -1,0 +1,21 @@
+<testcase>
+<info>
+<keywords>
+unittest
+haproxy
+CURLOPT_HAPROXY_CLIENT_IP
+</keywords>
+</info>
+
+#
+# Client-side
+<client>
+<features>
+unittest
+proxy
+</features>
+<name>
+unit tests for CURLOPT_HAPROXY_CLIENT_IP validation
+</name>
+</client>
+</testcase>

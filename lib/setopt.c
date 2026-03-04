@@ -54,6 +54,7 @@
 #include "tftp.h"
 #include "strdup.h"
 #include "escape.h"
+#include "curlx/inet_pton.h"
 
 /* The last 3 #include files should be in this order */
 #include "curl_printf.h"
@@ -197,6 +198,31 @@ static CURLcode setstropt_interface(char *option, char **devp,
 
   return CURLE_OK;
 }
+
+#ifndef CURL_DISABLE_PROXY
+/*
+ * Validate that the provided string is a valid IPv4 or IPv6 address.
+ * This prevents CRLF injection and other protocol manipulation attacks
+ * in the HAProxy PROXY protocol preface.
+ */
+static bool is_valid_ip_address(const char *ip)
+{
+  unsigned char addr[16]; /* enough for both IPv4 and IPv6 */
+
+  if(!ip || !*ip)
+    return false;
+
+  /* Try IPv4 first */
+  if(curlx_inet_pton(AF_INET, ip, addr) == 1)
+    return true;
+
+  /* Try IPv6 */
+  if(curlx_inet_pton(AF_INET6, ip, addr) == 1)
+    return true;
+
+  return false;
+}
+#endif
 
 #define C_SSLVERSION_VALUE(x) (x & 0xffff)
 #define C_SSLVERSION_MAX_VALUE(x) ((unsigned long)x & 0xffff0000)
@@ -2165,6 +2191,10 @@ static CURLcode setopt_cptr(struct Curl_easy *data, CURLoption option,
     /*
      * Set the client IP to send through HAProxy PROXY protocol
      */
+    if(ptr && !is_valid_ip_address((const char *)ptr)) {
+      /* Reject invalid IP addresses to prevent CRLF injection */
+      return CURLE_BAD_FUNCTION_ARGUMENT;
+    }
     result = Curl_setstropt(&s->str[STRING_HAPROXY_CLIENT_IP], ptr);
     /* enable the HAProxy protocol */
     s->haproxyprotocol = TRUE;
