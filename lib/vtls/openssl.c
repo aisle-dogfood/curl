@@ -4296,6 +4296,13 @@ static CURLcode ossl_on_session_reuse(struct Curl_cfilter *cf,
 {
   struct ssl_connect_data *connssl = cf->ctx;
   CURLcode result = CURLE_OK;
+#ifndef CURL_DISABLE_PROXY
+  const char *pinned_key = Curl_ssl_cf_is_proxy(cf) ?
+    data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY] :
+    data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#else
+  const char *pinned_key = data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#endif
 
   *do_early_data = FALSE;
   connssl->earlydata_max = scs->earlydata_max;
@@ -4304,6 +4311,11 @@ static CURLcode ossl_on_session_reuse(struct Curl_cfilter *cf,
   }
   else if(!Curl_alpn_contains_proto(alpns, scs->alpn)) {
     CURL_TRC_CF(data, cf, "SSL session has different ALPN, no early data");
+  }
+  else if(pinned_key) {
+    /* Disable early data when pinned public key is configured to ensure
+       verification completes before sending application data */
+    CURL_TRC_CF(data, cf, "pinned public key configured, no early data");
   }
   else {
     infof(data, "SSL session allows %zu bytes of early data, "
