@@ -142,6 +142,8 @@ CURLcode ipfs_url_rewrite(CURLU *uh, const char *protocol, char **url,
   char *gwquery = NULL;
   char *gwscheme = NULL;
   char *gwport = NULL;
+  char *gwuser = NULL;
+  char *gwpassword = NULL;
   char *inputpath = NULL;
   char *cid = NULL;
   char *pathbuffer = NULL;
@@ -202,6 +204,19 @@ CURLcode ipfs_url_rewrite(CURLU *uh, const char *protocol, char **url,
     goto clean;
   }
 
+  /* reject gateway URLs with embedded userinfo */
+  if(curl_url_get(gatewayurl, CURLUPART_USER, &gwuser, 0)
+                  != CURLUE_NO_USER) {
+    result = CURLE_URL_MALFORMAT;
+    goto clean;
+  }
+
+  if(curl_url_get(gatewayurl, CURLUPART_PASSWORD, &gwpassword, 0)
+                  != CURLUE_NO_PASSWORD) {
+    result = CURLE_URL_MALFORMAT;
+    goto clean;
+  }
+
   /* get gateway parts */
   if(curl_url_get(gatewayurl, CURLUPART_HOST,
                   &gwhost, CURLU_URLDECODE)) {
@@ -210,6 +225,12 @@ CURLcode ipfs_url_rewrite(CURLU *uh, const char *protocol, char **url,
 
   if(curl_url_get(gatewayurl, CURLUPART_SCHEME,
                   &gwscheme, CURLU_URLDECODE)) {
+    goto clean;
+  }
+
+  /* restrict gateway scheme to http or https */
+  if(strcmp(gwscheme, "http") && strcmp(gwscheme, "https")) {
+    result = CURLE_URL_MALFORMAT;
     goto clean;
   }
 
@@ -262,6 +283,8 @@ clean:
   curl_free(gwhost);
   curl_free(gwpath);
   curl_free(gwquery);
+  curl_free(gwuser);
+  curl_free(gwpassword);
   curl_free(inputpath);
   curl_free(gwscheme);
   curl_free(gwport);
