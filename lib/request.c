@@ -141,6 +141,9 @@ void Curl_req_hard_reset(struct SingleRequest *req, struct Curl_easy *data)
   req->keepon = 0;
   req->upgr101 = UPGR101_INIT;
   req->sendbuf_hds_len = 0;
+#ifndef CURL_DISABLE_WEBSOCKETS
+  Curl_safefree(data->state.ws_key);
+#endif
   req->timeofdoc = 0;
   req->location = NULL;
   req->newurl = NULL;

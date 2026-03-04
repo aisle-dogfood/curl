@@ -341,6 +341,10 @@ CURLcode Curl_close(struct Curl_easy **datap)
   Curl_safefree(data->state.formp);
 #endif
 
+#ifndef CURL_DISABLE_WEBSOCKETS
+  Curl_safefree(data->state.ws_key);
+#endif
+
   /* destruct wildcard structures if it is needed */
   Curl_wildcard_dtor(&data->wildcard);
   Curl_freeset(data);
