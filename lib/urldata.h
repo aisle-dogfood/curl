@@ -1182,6 +1182,9 @@ struct UrlState {
   BIT(http_hd_upgrade); /* Added HTTP header Upgrade: */
   BIT(http_hd_h2_settings); /* Added HTTP header H2Settings: */
 #endif
+#ifndef CURL_DISABLE_WEBSOCKETS
+  char *ws_key; /* Sec-WebSocket-Key value for handshake verification */
+#endif
 };
 
 /*

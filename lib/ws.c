@@ -32,6 +32,7 @@
 #include "curlx/dynbuf.h"
 #include "rand.h"
 #include "curlx/base64.h"
+#include "curl_sha1.h"
 #include "connect.h"
 #include "sendf.h"
 #include "multiif.h"
@@ -41,6 +42,7 @@
 #include "select.h"
 #include "curlx/nonblock.h"
 #include "curlx/strparse.h"
+#include "headers.h"
 
 /* The last 3 #include files should be in this order */
 #include "curl_printf.h"
@@ -1260,6 +1262,13 @@ CURLcode Curl_ws_request(struct Curl_easy *data, struct dynbuf *req)
   }
   strcpy(keyval, randstr);
   free(randstr);
+
+  /* Store the key for later verification of Sec-WebSocket-Accept */
+  Curl_safefree(data->state.ws_key);
+  data->state.ws_key = strdup(keyval);
+  if(!data->state.ws_key)
+    return CURLE_OUT_OF_MEMORY;
+
   for(i = 0; !result && (i < CURL_ARRAYSIZE(heads)); i++) {
     if(!Curl_checkheaders(data, heads[i].name, strlen(heads[i].name))) {
       result = curlx_dyn_addf(req, "%s: %s\r\n", heads[i].name,
@@ -1334,6 +1343,67 @@ CURLcode Curl_ws_accept(struct Curl_easy *data,
      |Sec-WebSocket-Key| header field concatenated with
      the string "258EAFA5-E914-47DA-95CA-C5AB0DC85B11".
   */
+  if(data->state.ws_key) {
+    /* RFC 6455 magic GUID */
+    const char *ws_guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    unsigned char hash[CURL_SHA1_DIGEST_LENGTH];
+    char *expected_accept = NULL;
+    size_t expected_len = 0;
+    struct dynbuf concat;
+    const char *accept_header = NULL;
+#if !defined(CURL_DISABLE_HTTP) && !defined(CURL_DISABLE_HEADERS_API)
+    struct Curl_llist_node *e;
+    struct Curl_header_store *hs;
+
+    /* Find the Sec-WebSocket-Accept header in the response */
+    for(e = Curl_llist_head(&data->state.httphdrs); e; e = Curl_node_next(e)) {
+      hs = Curl_node_elem(e);
+      if(curl_strequal(hs->name, "Sec-WebSocket-Accept")) {
+        accept_header = hs->value;
+        break;
+      }
+    }
+#endif
+
+    if(!accept_header) {
+      failf(data, "WebSocket upgrade missing Sec-WebSocket-Accept header");
+      result = CURLE_HTTP_RETURNED_ERROR;
+      goto out;
+    }
+
+    /* Concatenate the key with the magic GUID */
+    curlx_dyn_init(&concat, 256);
+    result = curlx_dyn_addf(&concat, "%s%s", data->state.ws_key, ws_guid);
+    if(result) {
+      curlx_dyn_free(&concat);
+      goto out;
+    }
+
+    /* Compute SHA-1 hash */
+    result = Curl_sha1it(hash, (const unsigned char *)curlx_dyn_ptr(&concat),
+                         curlx_dyn_len(&concat));
+    curlx_dyn_free(&concat);
+    if(result)
+      goto out;
+
+    /* Base64 encode the hash */
+    result = curlx_base64_encode((char *)hash, CURL_SHA1_DIGEST_LENGTH,
+                                 &expected_accept, &expected_len);
+    if(result)
+      goto out;
+
+    /* Compare with received Sec-WebSocket-Accept header */
+    if(!expected_accept || strcmp(accept_header, expected_accept) != 0) {
+      failf(data, "WebSocket upgrade failed: "
+            "Sec-WebSocket-Accept mismatch (expected: %s, got: %s)",
+            expected_accept ? expected_accept : "NULL", accept_header);
+      free(expected_accept);
+      result = CURLE_HTTP_RETURNED_ERROR;
+      goto out;
+    }
+
+    free(expected_accept);
+  }
 
   /* If the response includes a |Sec-WebSocket-Extensions| header field and
      this header field indicates the use of an extension that was not present
