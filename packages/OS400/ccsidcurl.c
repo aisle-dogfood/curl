@@ -1427,14 +1427,44 @@ curl_mime_data_ccsid(curl_mimepart *part,
 {
   char *s = (char *) NULL;
   CURLcode result;
+  size_t convertedsize;
 
   if(!data)
     return curl_mime_data(part, data, datasize);
-  s = dynconvert(ASCII_CCSID, data, datasize, ccsid);
-  if(!s)
-    return CURLE_OUT_OF_MEMORY;
 
-  result = curl_mime_data(part, s, datasize);
+  /* If datasize is CURL_ZERO_TERMINATED, use dynconvert which will
+     null-terminate the output, and pass CURL_ZERO_TERMINATED to
+     curl_mime_data so it computes the length itself. */
+  if(datasize == CURL_ZERO_TERMINATED) {
+    s = dynconvert(ASCII_CCSID, data, -1, ccsid);
+    if(!s)
+      return CURLE_OUT_OF_MEMORY;
+    convertedsize = CURL_ZERO_TERMINATED;
+  }
+  else {
+    /* For explicit length, allocate buffer and call convert to get
+       the actual converted length. */
+    size_t bufsize;
+    int convlen;
+
+    /* Ensure we allocate at least 1 byte to avoid malloc(0) issues */
+    bufsize = datasize * MAX_CONV_EXPANSION;
+    if(bufsize == 0)
+      bufsize = 1;
+
+    s = malloc(bufsize);
+    if(!s)
+      return CURLE_OUT_OF_MEMORY;
+
+    convlen = convert(s, bufsize, ASCII_CCSID, data, datasize, ccsid);
+    if(convlen < 0) {
+      free(s);
+      return CURLE_CONV_FAILED;
+    }
+    convertedsize = (size_t) convlen;
+  }
+
+  result = curl_mime_data(part, s, convertedsize);
   free(s);
   return result;
 }
