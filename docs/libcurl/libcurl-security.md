@@ -443,13 +443,15 @@ libcurl-using applications that set the 'setuid' bit to run with elevated or
 modified rights also implicitly give that extra power to libcurl and this
 should only be done after careful considerations.
 
-Giving setuid powers to the application means that libcurl can save files using
-those new rights (if for example the `SSLKEYLOGFILE` environment variable is
-set). Also: if the application wants these powers to read or manage secrets
-that the user is otherwise not able to view (like credentials for a login
-etc), it should be noted that libcurl still might understand proxy environment
-variables that allow the user to redirect libcurl operations to use a proxy
-controlled by the user.
+libcurl ignores the `SSLKEYLOGFILE` environment variable when running in a
+privileged context (setuid/setgid) to prevent TLS secrets from being written
+to attacker-controlled locations.
+
+Also: if the application wants these powers to read or manage secrets that the
+user is otherwise not able to view (like credentials for a login etc), it
+should be noted that libcurl still might understand proxy environment variables
+that allow the user to redirect libcurl operations to use a proxy controlled
+by the user.
 
 # File descriptors, fork and NTLM
 

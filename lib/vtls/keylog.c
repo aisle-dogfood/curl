@@ -41,12 +41,39 @@
 /* The fp for the open SSLKEYLOGFILE, or NULL if not open */
 static FILE *keylog_file_fp;
 
+/*
+ * Check if running in a privileged context (setuid/setgid).
+ * Returns TRUE if privileged, FALSE otherwise.
+ */
+static bool
+is_privileged(void)
+{
+#if defined(HAVE_GETEUID) && defined(HAVE_GETUID)
+  /* Detect if running setuid by comparing real and effective user IDs */
+  if(getuid() != geteuid())
+    return TRUE;
+#endif
+
+#if defined(HAVE_GETEGID) && defined(HAVE_GETGID)
+  /* Detect if running setgid by comparing real and effective group IDs */
+  if(getgid() != getegid())
+    return TRUE;
+#endif
+
+  return FALSE;
+}
+
 void
 Curl_tls_keylog_open(void)
 {
   char *keylog_file_name;
 
   if(!keylog_file_fp) {
+    /* Do not honor SSLKEYLOGFILE in privileged contexts to prevent
+       information disclosure via environment variable manipulation */
+    if(is_privileged())
+      return;
+
     keylog_file_name = curl_getenv("SSLKEYLOGFILE");
     if(keylog_file_name) {
       keylog_file_fp = fopen(keylog_file_name, FOPEN_APPENDTEXT);
