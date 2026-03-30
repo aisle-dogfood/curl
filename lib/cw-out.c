@@ -107,6 +107,7 @@ struct cw_out_ctx {
   struct cw_out_buf *buf;
   BIT(paused);
   BIT(errored);
+  BIT(soft_limit_warned);
 };
 
 static CURLcode cw_out_write(struct Curl_easy *data,
@@ -141,6 +142,7 @@ static void cw_out_bufs_free(struct cw_out_ctx *ctx)
     cw_out_buf_free(ctx->buf);
     ctx->buf = next;
   }
+  ctx->soft_limit_warned = FALSE; /* reset warning flag when buffers freed */
 }
 
 static size_t cw_out_bufs_len(struct cw_out_ctx *ctx)
@@ -224,6 +226,8 @@ static CURLcode cw_out_cb_write(struct cw_out_ctx *ctx,
     }
     ctx->paused = TRUE;
     CURL_TRC_WRITE(data, "[OUT] PAUSE requested by client");
+    infof(data, "Transfer paused by client write callback, "
+          "buffering incoming data");
     result = Curl_xfer_pause_recv(data, TRUE);
     return result ? result : CURLE_AGAIN;
   }
@@ -363,11 +367,24 @@ static CURLcode cw_out_append(struct cw_out_ctx *ctx,
                               cw_out_type otype,
                               const char *buf, size_t blen)
 {
+  size_t current_len = cw_out_bufs_len(ctx);
+  size_t new_len = current_len + blen;
+
   CURL_TRC_WRITE(data, "[OUT] paused, buffering %zu more bytes (%zu/%d)",
-                 blen, cw_out_bufs_len(ctx), DYN_PAUSE_BUFFER);
-  if(cw_out_bufs_len(ctx) + blen > DYN_PAUSE_BUFFER) {
+                 blen, current_len, DYN_PAUSE_BUFFER);
+
+  /* Check hard cap */
+  if(new_len > DYN_PAUSE_BUFFER) {
     failf(data, "pause buffer not large enough -> CURLE_TOO_LARGE");
     return CURLE_TOO_LARGE;
+  }
+
+  /* Check soft watermark and warn application */
+  if(new_len > DYN_PAUSE_BUFFER_SOFT && !ctx->soft_limit_warned) {
+    infof(data, "Pause buffer exceeds soft limit (%zu/%d bytes buffered). "
+          "Consider unpausing to avoid hitting hard cap.",
+          new_len, DYN_PAUSE_BUFFER);
+    ctx->soft_limit_warned = TRUE;
   }
 
   /* if we do not have a buffer, or it is of another type, make a new one.
@@ -506,6 +523,7 @@ CURLcode Curl_cw_out_unpause(struct Curl_easy *data)
     struct cw_out_ctx *ctx = (struct cw_out_ctx *)cw_out;
     CURL_TRC_WRITE(data, "[OUT] unpause");
     ctx->paused = FALSE;
+    ctx->soft_limit_warned = FALSE; /* reset warning flag on unpause */
     result = Curl_cw_pause_flush(data);
     if(!result)
       result = cw_out_flush(data, cw_out, FALSE);
