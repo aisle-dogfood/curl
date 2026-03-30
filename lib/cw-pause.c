@@ -44,6 +44,8 @@
 #define CW_PAUSE_BUF_CHUNK         (16 * 1024)
 /* when content decoding, write data in chunks */
 #define CW_PAUSE_DEC_WRITE_CHUNK   (4096)
+/* Maximum total bytes to buffer while paused to prevent DoS */
+#define CW_PAUSE_MAX_BUFFER_SIZE   (2*1024*1024)
 
 struct cw_pause_buf {
   struct cw_pause_buf *next;
@@ -102,6 +104,7 @@ static CURLcode cw_pause_init(struct Curl_easy *data,
   struct cw_pause_ctx *ctx = writer->ctx;
   (void)data;
   ctx->buf = NULL;
+  ctx->buf_total = 0;
   return CURLE_OK;
 }
 
@@ -112,6 +115,7 @@ static void cw_pause_bufs_free(struct cw_pause_ctx *ctx)
     cw_pause_buf_free(ctx->buf);
     ctx->buf = next;
   }
+  ctx->buf_total = 0;
 }
 
 static void cw_pause_close(struct Curl_easy *data, struct Curl_cwriter *writer)
@@ -202,6 +206,14 @@ static CURLcode cw_pause_write(struct Curl_easy *data,
 
   do {
     size_t nwritten = 0;
+    /* Enforce hard limit on total buffered data to prevent DoS */
+    if(ctx->buf_total >= CW_PAUSE_MAX_BUFFER_SIZE) {
+      CURL_TRC_WRITE(data, "[PAUSE] buffer limit reached (%zu bytes), "
+                     "cannot buffer more", ctx->buf_total);
+      failf(data, "Paused transfer buffer limit reached: %zu bytes",
+            ctx->buf_total);
+      return CURLE_RECV_ERROR;
+    }
     if(ctx->buf && (ctx->buf->type == type) && (type & CLIENTWRITE_BODY)) {
       /* same type and body, append to current buffer which has a soft
        * limit and should take everything up to OOM. */
