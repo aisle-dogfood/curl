@@ -171,6 +171,7 @@ static CURLcode smtp_parse_custom_request(struct Curl_easy *data,
 static CURLcode smtp_parse_address(const char *fqma,
                                    char **address, struct hostname *host,
                                    const char **suffix);
+static bool smtp_has_ctrl_chars(const char *str);
 static CURLcode smtp_perform_auth(struct Curl_easy *data, const char *mech,
                                   const struct bufref *initresp);
 static CURLcode smtp_continue_auth(struct Curl_easy *data, const char *mech,
@@ -651,6 +652,10 @@ static CURLcode smtp_perform_command(struct Curl_easy *data,
       /* Establish whether we should report that we support SMTPUTF8 for EXPN
          commands to the server as per RFC-6531 sect. 3.1 point 6 */
       utf8 = (smtpc->utf8_supported) && (!strcmp(smtp->custom, "EXPN"));
+
+      /* Reject control characters to prevent command injection */
+      if(smtp_has_ctrl_chars(smtp->rcpt->data))
+        return CURLE_URL_MALFORMAT;
 
       /* Send the custom recipient based command such as the EXPN command */
       result = Curl_pp_sendf(data, &smtpc->pp,
@@ -1841,6 +1846,25 @@ static CURLcode smtp_parse_custom_request(struct Curl_easy *data,
 
 /***********************************************************************
  *
+ * smtp_has_ctrl_chars()
+ *
+ * Check if a string contains control characters (0x00-0x1F or 0x7F).
+ * Returns TRUE if control characters are found, FALSE otherwise.
+ */
+static bool smtp_has_ctrl_chars(const char *str)
+{
+  if(str) {
+    while(*str) {
+      if(ISCNTRL(*str))
+        return TRUE;
+      str++;
+    }
+  }
+  return FALSE;
+}
+
+/***********************************************************************
+ *
  * smtp_parse_address()
  *
  * Parse the fully qualified mailbox address into a local address part and the
@@ -1879,10 +1903,15 @@ static CURLcode smtp_parse_address(const char *fqma, char **address,
   CURLcode result = CURLE_OK;
   size_t length;
   char *addressend;
+  char *dup;
+
+  /* Reject control chars to prevent command injection */
+  if(smtp_has_ctrl_chars(fqma))
+    return CURLE_URL_MALFORMAT;
 
   /* Duplicate the fully qualified email address so we can manipulate it,
      ensuring it does not contain the delimiters if specified */
-  char *dup = strdup(fqma[0] == '<' ? fqma + 1  : fqma);
+  dup = strdup(fqma[0] == '<' ? fqma + 1  : fqma);
   if(!dup)
     return CURLE_OUT_OF_MEMORY;
 
