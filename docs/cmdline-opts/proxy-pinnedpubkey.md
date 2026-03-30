@@ -28,4 +28,8 @@ indicating its identity. A public key is extracted from this certificate and
 if it does not exactly match the public key provided to this option, curl
 aborts the connection before sending or receiving any data.
 
+To ensure this guarantee, TLS 1.3 early data (0-RTT) is automatically disabled
+when public key pinning is enabled, preventing any data transmission before
+pin verification completes.
+
 Before curl 8.10.0 this option did not work due to a bug.
