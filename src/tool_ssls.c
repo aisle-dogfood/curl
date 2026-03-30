@@ -23,6 +23,10 @@
  ***************************************************************************/
 #include "tool_setup.h"
 
+#ifdef HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
+
 #include "tool_cfgable.h"
 #include "tool_cb_dbg.h"
 #include "tool_msgs.h"
@@ -32,6 +36,13 @@
 
 /* The maximum line length for an ecoded session ticket */
 #define MAX_SSLS_LINE (64 * 1024)
+
+/* Restrictive permissions for SSL session files (owner read/write only) */
+#ifdef _WIN32
+#define SSL_SESSION_PERMS (S_IREAD | S_IWRITE)
+#else
+#define SSL_SESSION_PERMS (S_IRUSR | S_IWUSR)
+#endif
 
 
 static CURLcode tool_ssls_easy(struct OperationConfig *config,
@@ -188,12 +199,30 @@ CURLcode tool_ssls_save(struct OperationConfig *config,
   struct tool_ssls_ctx ctx;
   CURL *easy = NULL;
   CURLcode r = CURLE_OK;
+  int fd;
 
   ctx.exported = 0;
-  ctx.fp = fopen(filename, FOPEN_WRITETEXT);
-  if(!ctx.fp) {
+  ctx.fp = NULL;
+
+  /* Create the file with restrictive permissions (owner read/write only) */
+  fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC | CURL_O_BINARY,
+            SSL_SESSION_PERMS);
+  if(fd == -1) {
     warnf("Warning: Failed to create SSL session file %s",
           filename);
+    goto out;
+  }
+
+  /* Convert file descriptor to FILE pointer */
+#ifdef _WIN32
+  ctx.fp = fdopen(fd, "wt");
+#else
+  ctx.fp = fdopen(fd, "w");
+#endif
+  if(!ctx.fp) {
+    warnf("Warning: Failed to open SSL session file %s",
+          filename);
+    close(fd);
     goto out;
   }
 
