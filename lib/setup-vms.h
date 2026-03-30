@@ -99,6 +99,8 @@ static char *vms_translate_path(const char *path)
     /* We can not translate it, so return the original string */
     return (char *)path;
   }
+
+  return unix_path;
 }
 #   else
     /* VMS translate path is actually not needed on the current 64-bit */
