@@ -54,7 +54,24 @@ static CURLcode test_lib566(const char *URL)
     res = curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD,
                             &content_length);
 
-    moo = fopen(libtest_arg2, "wb");
+    /* Create file with restrictive permissions (0600) */
+    {
+      int fd;
+#ifdef _WIN32
+      fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY,
+                S_IREAD | S_IWRITE);
+#else
+      fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_TRUNC,
+                S_IRUSR | S_IWUSR);
+#endif
+      if(fd != -1) {
+        moo = fdopen(fd, "wb");
+        if(!moo)
+          close(fd);
+      }
+      else
+        moo = NULL;
+    }
     if(moo) {
       curl_mfprintf(moo, "CL %.0f\n", content_length);
       fclose(moo);

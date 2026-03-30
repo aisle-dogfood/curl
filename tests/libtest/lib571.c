@@ -94,8 +94,23 @@ static CURLcode test_lib571(const char *URL)
   CURL *curl;
   char *stream_uri = NULL;
   int request = 1;
+  FILE *protofile;
+  int fd;
 
-  FILE *protofile = fopen(libtest_arg2, "wb");
+  /* Create file with restrictive permissions (0600) */
+#ifdef _WIN32
+  fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY,
+            S_IREAD | S_IWRITE);
+#else
+  fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+#endif
+  if(fd != -1) {
+    protofile = fdopen(fd, "wb");
+    if(!protofile)
+      close(fd);
+  }
+  else
+    protofile = NULL;
   if(!protofile) {
     curl_mfprintf(stderr, "Couldn't open the protocol dump file\n");
     return TEST_ERR_MAJOR_BAD;

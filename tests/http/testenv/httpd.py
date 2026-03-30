@@ -276,26 +276,26 @@ class Httpd:
         self._mkpath(self._logs_dir)
         self._mkpath(self._tmp_dir)
         self._mkpath(os.path.join(self._docs_dir, 'two'))
-        with open(os.path.join(self._docs_dir, 'data.json'), 'w') as fd:
+        with open(os.path.join(self._docs_dir, 'data.json'), 'w', opener=lambda path, flags: os.open(path, flags, 0o600)) as fd:
             data = {
                 'server': f'{domain1}',
             }
             fd.write(JSONEncoder().encode(data))
-        with open(os.path.join(self._docs_dir, 'two/data.json'), 'w') as fd:
+        with open(os.path.join(self._docs_dir, 'two/data.json'), 'w', opener=lambda path, flags: os.open(path, flags, 0o600)) as fd:
             data = {
                 'server': f'{domain2}',
             }
             fd.write(JSONEncoder().encode(data))
         if self._proxy_auth_basic:
-            with open(self._basic_passwords, 'w') as fd:
+            with open(self._basic_passwords, 'w', opener=lambda path, flags: os.open(path, flags, 0o600)) as fd:
                 fd.write('proxy:$apr1$FQfeInbs$WQZbODJlVg60j0ogEIlTW/\n')
         if self._auth_digest:
-            with open(self._digest_passwords, 'w') as fd:
+            with open(self._digest_passwords, 'w', opener=lambda path, flags: os.open(path, flags, 0o600)) as fd:
                 fd.write('test:restricted area:57123e269fd73d71ae0656594e938e2f\n')
             self._mkpath(os.path.join(self.docs_dir, 'restricted/digest'))
-            with open(os.path.join(self.docs_dir, 'restricted/digest/data.json'), 'w') as fd:
+            with open(os.path.join(self.docs_dir, 'restricted/digest/data.json'), 'w', opener=lambda path, flags: os.open(path, flags, 0o600)) as fd:
                 fd.write('{"area":"digest"}\n')
-        with open(self._conf_file, 'w') as fd:
+        with open(self._conf_file, 'w', opener=lambda path, flags: os.open(path, flags, 0o600)) as fd:
             for m in self.MODULES:
                 if os.path.exists(os.path.join(self._mods_dir, f'mod_{m}.so')):
                     fd.write(f'LoadModule {m}_module   "{self._mods_dir}/mod_{m}.so"\n')

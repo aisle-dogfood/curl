@@ -102,9 +102,20 @@ CURLcode Curl_fopen(struct Curl_easy *data, const char *filename,
   char *dir = NULL;
   *tempname = NULL;
 
-  *fh = fopen(filename, FOPEN_WRITETEXT);
-  if(!*fh)
+  /* Create file with restrictive permissions (0600) */
+#ifdef _WIN32
+  fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY,
+            S_IREAD | S_IWRITE);
+#else
+  fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+#endif
+  if(fd == -1)
     goto fail;
+  *fh = fdopen(fd, FOPEN_WRITETEXT);
+  if(!*fh) {
+    close(fd);
+    goto fail;
+  }
   if(
 #ifdef UNDER_CE
      stat(filename, &sb) == -1

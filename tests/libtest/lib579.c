@@ -35,7 +35,22 @@ static size_t last_ul_total = 0;
 
 static void progress_final_report(void)
 {
-  FILE *moo = fopen(libtest_arg2, "ab");
+  FILE *moo;
+  int fd;
+  /* Create file with restrictive permissions (0600) */
+#ifdef _WIN32
+  fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_APPEND | O_BINARY,
+            S_IREAD | S_IWRITE);
+#else
+  fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_APPEND, S_IRUSR | S_IWUSR);
+#endif
+  if(fd != -1) {
+    moo = fdopen(fd, "ab");
+    if(!moo)
+      close(fd);
+  }
+  else
+    moo = NULL;
   curl_mfprintf(moo ? moo : stderr, "Progress: end UL %zu/%zu\n",
                 last_ul, last_ul_total);
   if(moo)
@@ -59,7 +74,23 @@ static int t579_progress_callback(void *clientp, double dltotal, double dlnow,
   last_ul = (size_t)ulnow;
   last_ul_total = (size_t)ultotal;
   if(!started) {
-    FILE *moo = fopen(libtest_arg2, "ab");
+    FILE *moo;
+    int fd;
+    /* Create file with restrictive permissions (0600) */
+#ifdef _WIN32
+    fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_APPEND | O_BINARY,
+              S_IREAD | S_IWRITE);
+#else
+    fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_APPEND,
+              S_IRUSR | S_IWUSR);
+#endif
+    if(fd != -1) {
+      moo = fdopen(fd, "ab");
+      if(!moo)
+        close(fd);
+    }
+    else
+      moo = NULL;
     curl_mfprintf(moo ? moo : stderr, "Progress: start UL %zu/%zu\n",
                   last_ul, last_ul_total);
     if(moo)
