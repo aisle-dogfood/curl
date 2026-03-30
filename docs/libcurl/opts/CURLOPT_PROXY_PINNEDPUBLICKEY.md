@@ -45,6 +45,10 @@ indicating its identity. A public key is extracted from this certificate and
 if it does not exactly match the public key provided to this option, libcurl
 aborts the connection before sending or receiving any data.
 
+To ensure this guarantee, TLS 1.3 early data (0-RTT) is automatically disabled
+when public key pinning is enabled, preventing any data transmission before
+pin verification completes.
+
 On mismatch, *CURLE_SSL_PINNEDPUBKEYNOTMATCH* is returned.
 
 The application does not have to keep the string around after setting this

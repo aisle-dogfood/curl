@@ -2366,6 +2366,13 @@ static CURLcode cf_ngtcp2_on_session_reuse(struct Curl_cfilter *cf,
 {
   struct cf_ngtcp2_ctx *ctx = cf->ctx;
   CURLcode result = CURLE_OK;
+#ifndef CURL_DISABLE_PROXY
+  const char *pinnedpubkey = Curl_ssl_cf_is_proxy(cf) ?
+    data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY] :
+    data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#else
+  const char *pinnedpubkey = data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+#endif
 
   *do_early_data = FALSE;
 #if defined(USE_OPENSSL) && defined(HAVE_OPENSSL_EARLYDATA)
@@ -2389,6 +2396,11 @@ static CURLcode cf_ngtcp2_on_session_reuse(struct Curl_cfilter *cf,
   }
   else if(!Curl_alpn_contains_proto(alpns, scs->alpn)) {
     CURL_TRC_CF(data, cf, "SSL session from different ALPN, no early data");
+  }
+  else if(pinnedpubkey) {
+    /* Disable early data when public key pinning is enabled to ensure
+     * pin verification happens before any data is sent */
+    CURL_TRC_CF(data, cf, "Public key pinning enabled, no early data");
   }
   else if(!scs->quic_tp || !scs->quic_tp_len) {
     CURL_TRC_CF(data, cf, "no 0RTT transport parameters, no early data, ");
