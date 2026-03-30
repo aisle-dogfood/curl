@@ -31,6 +31,7 @@
 #include <stddef.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <limits.h>
 
 #pragma enum(int)
 
@@ -1427,16 +1428,55 @@ curl_mime_data_ccsid(curl_mimepart *part,
 {
   char *s = (char *) NULL;
   CURLcode result;
+  size_t convertedsize;
 
   if(!data)
     return curl_mime_data(part, data, datasize);
-  s = dynconvert(ASCII_CCSID, data, datasize, ccsid);
-  if(!s)
-    return CURLE_OUT_OF_MEMORY;
 
-  result = curl_mime_data(part, s, datasize);
-  free(s);
-  return result;
+  /* Handle CURL_ZERO_TERMINATED case: convert as null-terminated string */
+  if(datasize == CURL_ZERO_TERMINATED) {
+    s = dynconvert(ASCII_CCSID, data, -1, ccsid);
+    if(!s)
+      return CURLE_OUT_OF_MEMORY;
+    result = curl_mime_data(part, s, CURL_ZERO_TERMINATED);
+    free(s);
+    return result;
+  }
+
+  /* For explicit size, perform conversion and get actual converted length */
+  {
+    size_t bufsize;
+    int convertedlen;
+
+    /* Check for overflow in buffer size calculation */
+    if(datasize > (SIZE_MAX - 1) / MAX_CONV_EXPANSION)
+      return CURLE_OUT_OF_MEMORY;
+
+    bufsize = datasize * MAX_CONV_EXPANSION + 1;
+    s = malloc(bufsize);
+    if(!s)
+      return CURLE_OUT_OF_MEMORY;
+
+    /* convert() expects int for size, but datasize is size_t.
+       For OS/400, int is typically 32-bit. Large sizes should use
+       CURL_ZERO_TERMINATED instead. */
+    if(datasize > INT_MAX) {
+      free(s);
+      return CURLE_BAD_FUNCTION_ARGUMENT;
+    }
+
+    convertedlen = convert(s, bufsize, ASCII_CCSID, data, (int)datasize,
+                           ccsid);
+    if(convertedlen < 0) {
+      free(s);
+      return CURLE_CONV_FAILED;
+    }
+
+    convertedsize = (size_t)convertedlen;
+    result = curl_mime_data(part, s, convertedsize);
+    free(s);
+    return result;
+  }
 }
 
 CURLUcode
