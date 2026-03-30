@@ -23,6 +23,16 @@
  ***************************************************************************/
 
 #include "tool_setup.h"
+
+#ifdef HAVE_FCNTL_H
+/* for open() */
+#include <fcntl.h>
+#endif
+
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+
 #include "tool_stderr.h"
 #include "tool_msgs.h"
 
@@ -48,6 +58,35 @@ void tool_set_stderr_file(const char *filename)
     return;
   }
 
+#if defined(HAVE_FCNTL_H) && defined(HAVE_SYS_STAT_H) && !defined(_WIN32)
+  /* On Unix-like systems, create the file with restrictive permissions (0600)
+     to prevent leakage of sensitive information that may be written to stderr.
+     This protects against insecure umask settings. */
+  {
+    int fd;
+    int flags = O_CREAT | O_WRONLY | O_TRUNC;
+    mode_t mode = S_IRUSR | S_IWUSR; /* 0600 */
+
+    /* precheck that filename is accessible to lessen the chance that the
+       subsequent freopen will fail. */
+    fd = open(filename, flags, mode);
+    if(fd == -1) {
+      warnf("Warning: Failed to open %s", filename);
+      return;
+    }
+
+    /* Convert file descriptor to FILE* */
+    fp = fdopen(fd, FOPEN_WRITETEXT);
+    if(!fp) {
+      close(fd);
+      warnf("Warning: Failed to open %s", filename);
+      return;
+    }
+    fclose(fp);
+  }
+#else
+  /* On Windows and other systems, use fopen.
+     Windows does not use Unix permissions. */
   /* precheck that filename is accessible to lessen the chance that the
      subsequent freopen will fail. */
   fp = fopen(filename, FOPEN_WRITETEXT);
@@ -56,6 +95,7 @@ void tool_set_stderr_file(const char *filename)
     return;
   }
   fclose(fp);
+#endif
 
   /* freopen the actual stderr (stdio.h stderr) instead of tool_stderr since
      the latter may be set to stdout. */
