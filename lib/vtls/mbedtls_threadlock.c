@@ -93,7 +93,7 @@ int Curl_mbedtlsthreadlock_thread_cleanup(void)
 
 int Curl_mbedtlsthreadlock_lock_function(int n)
 {
-  if(n < NUMT) {
+  if(n >= 0 && n < NUMT) {
 #if defined(USE_THREADS_POSIX) && defined(HAVE_PTHREAD_H)
     if(pthread_mutex_lock(&mutex_buf[n])) {
       DEBUGF(fprintf(stderr,
@@ -113,7 +113,7 @@ int Curl_mbedtlsthreadlock_lock_function(int n)
 
 int Curl_mbedtlsthreadlock_unlock_function(int n)
 {
-  if(n < NUMT) {
+  if(n >= 0 && n < NUMT) {
 #if defined(USE_THREADS_POSIX) && defined(HAVE_PTHREAD_H)
     if(pthread_mutex_unlock(&mutex_buf[n])) {
       DEBUGF(fprintf(stderr,
