@@ -100,7 +100,7 @@ $!  Just create the directories, do not delete them.
 $!  --------------------------------------------------
 $   if remove_files .eq. 0
 $   then
-$       create/dir 'new_gnu''this_dir'/prot=(o:rwed)
+$       create/dir 'new_gnu''this_dir'/prot=(s:rwed,o:rwed,g,w)
 $   endif
 $   goto curl_dir_loop
 $curl_dir_loop_end:
@@ -110,9 +110,9 @@ $! Need to add in the executable file
 $!-----------------------------------
 $ if remove_files .eq. 0
 $ then
-$   copy [--.src]curl.exe 'new_gnu'[usr.bin]gnv$curl.exe/prot=w:re
-$   copy [--]curl-config. 'new_gnu'[usr.bin]curl-config./prot=w:re
-$   copy sys$disk:[]gnv$libcurl.exe 'new_gnu'[usr.lib]gnv$libcurl.exe/prot=w:re
+$   copy [--.src]curl.exe 'new_gnu'[usr.bin]gnv$curl.exe/prot=(s:rwed,o:rwed,g,w)
+$   copy [--]curl-config. 'new_gnu'[usr.bin]curl-config./prot=(s:rwed,o:rwed,g,w)
+$   copy sys$disk:[]gnv$libcurl.exe 'new_gnu'[usr.lib]gnv$libcurl.exe/prot=(s:rwed,o:rwed,g,w)
 $ endif
 $!
 $ if remove_files .eq. 0

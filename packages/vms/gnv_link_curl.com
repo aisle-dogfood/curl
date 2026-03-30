@@ -279,7 +279,7 @@ and before installing Curl.
       commands.  We want the directory to be in lowercase except on VAX.
 
     $SET PROCESS/PARSE=extend !If not VAX.
-    $CREATE/DIR device:[vms$common.gnv.lib]/prot=w:re
+    $CREATE/DIR device:[vms$common.gnv.lib]/prot=(s:rwed,o:rwed,g:re,w)
 
   2. Extract the ssl$crypto_shr32.exe and ssl$libssl_shr32.exe images.
 
