@@ -320,8 +320,6 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(struct Curl_cfilter *cf,
   infof(data, "SOCKS5 server supports GSS-API %s data protection.",
         (gss_enc == 0) ? "no" :
         ((gss_enc == 1) ? "integrity":"confidentiality") );
-  /* force to no data protection, avoid encryption/decryption for now */
-  gss_enc = 0;
   /*
    * Sending the encryption type in clear seems wrong. It should be
    * protected with gss_seal()/gss_wrap(). See RFC1961 extract below
@@ -548,15 +546,10 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(struct Curl_cfilter *cf,
         ((socksreq[0] == 1) ? " GSS-API integrity" :
          " GSS-API confidentiality"));
 
-  /* For later use if encryption is required
-     conn->socks5_gssapi_enctype = socksreq[0];
-     if(socksreq[0] != 0)
-       conn->socks5_sspi_context = sspi_context;
-     else {
-       Curl_pSecFn->DeleteSecurityContext(&sspi_context);
-       conn->socks5_sspi_context = sspi_context;
-     }
-  */
+  conn->socks5_gssapi_enctype = socksreq[0];
+  if(socksreq[0] == 0)
+    Curl_pSecFn->DeleteSecurityContext(&sspi_context);
+
   return CURLE_OK;
 error:
   free(service_name);
