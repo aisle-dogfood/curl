@@ -143,24 +143,25 @@ canonicalize_path()
         else    P="$(pwd)/${1}"
         fi
 
-        R=
-        IFSSAVE="${IFS}"
-        IFS="/"
+        # Use a subshell to prevent IFS from affecting the global scope
+        (
+                R=
+                IFS="/"
 
-        for C in ${P}
-        do      IFS="${IFSSAVE}"
-                case "${C}" in
-                .)      ;;
-                ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
-                        ;;
-                ?*)     R="${R}${C}/"
-                        ;;
-                *)      ;;
-                esac
-        done
+                for C in ${P}
+                do
+                        case "${C}" in
+                        .)      ;;
+                        ..)     R="$(expr "${R}" : '^\(.*/\)..*')"
+                                ;;
+                        ?*)     R="${R}${C}/"
+                                ;;
+                        *)      ;;
+                        esac
+                done
 
-        IFS="${IFSSAVE}"
-        echo "/$(expr "${R}" : '^\(.*\)/')"
+                echo "/$(expr "${R}" : '^\(.*\)/')"
+        )
 }
 
 
