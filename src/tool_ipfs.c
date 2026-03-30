@@ -213,6 +213,28 @@ CURLcode ipfs_url_rewrite(CURLU *uh, const char *protocol, char **url,
     goto clean;
   }
 
+  /* validate scheme is http or https only */
+  if(strcmp(gwscheme, "http") && strcmp(gwscheme, "https")) {
+    result = CURLE_URL_MALFORMAT;
+    goto clean;
+  }
+
+  /* reject gateway URLs with embedded credentials */
+  {
+    char *gwuser = NULL;
+    char *gwpass = NULL;
+    if(curl_url_get(gatewayurl, CURLUPART_USER, &gwuser, 0) == CURLUE_OK) {
+      curl_free(gwuser);
+      result = CURLE_URL_MALFORMAT;
+      goto clean;
+    }
+    if(curl_url_get(gatewayurl, CURLUPART_PASSWORD, &gwpass, 0) == CURLUE_OK) {
+      curl_free(gwpass);
+      result = CURLE_URL_MALFORMAT;
+      goto clean;
+    }
+  }
+
   curl_url_get(gatewayurl, CURLUPART_PORT, &gwport, CURLU_URLDECODE);
   curl_url_get(gatewayurl, CURLUPART_PATH, &gwpath, CURLU_URLDECODE);
 
