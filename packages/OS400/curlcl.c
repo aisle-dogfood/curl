@@ -135,6 +135,7 @@ main(int argsc, struct arguments *args)
   int i;
   int exitcode;
   char library[11];
+  size_t cmdargs_len;
 
   /* Extract current program library name. */
   for(i = 0; i < 10; i++) {
@@ -147,8 +148,13 @@ main(int argsc, struct arguments *args)
   }
   library[i] = '\0';
 
+  /* Clamp length to buffer size to prevent out-of-bounds read. */
+  cmdargs_len = args->cmdargs->len;
+  if(cmdargs_len > sizeof(args->cmdargs->string))
+    cmdargs_len = sizeof(args->cmdargs->string);
+
   /* Measure arguments size. */
-  exitcode = parse_command_line(args->cmdargs->string, args->cmdargs->len,
+  exitcode = parse_command_line(args->cmdargs->string, cmdargs_len,
                                 &argc, NULL, &argsize, NULL);
 
   if(!exitcode) {
@@ -162,7 +168,7 @@ main(int argsc, struct arguments *args)
       _SYSPTR pgmptr = rslvsp(WLI_PGM, (char *) CURLPGM, library, _AUTH_NONE);
       _LU_Work_Area_T *luwrka = (_LU_Work_Area_T *) _LUWRKA();
 
-      parse_command_line(args->cmdargs->string, args->cmdargs->len,
+      parse_command_line(args->cmdargs->string, cmdargs_len,
                          &argc, argv, &argsize, (char *) (argv + argc + 1));
 
       /* Call program. */
