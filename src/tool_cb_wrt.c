@@ -38,7 +38,7 @@
 #ifdef _WIN32
 #define OPENMODE S_IREAD | S_IWRITE
 #else
-#define OPENMODE S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH
+#define OPENMODE S_IRUSR | S_IWUSR
 #endif
 
 /* create/open a local file for writing, return TRUE on success */
@@ -54,8 +54,14 @@ bool tool_create_output_file(struct OutStruct *outs,
   if(config->file_clobber_mode == CLOBBER_ALWAYS ||
      (config->file_clobber_mode == CLOBBER_DEFAULT &&
       !outs->is_cd_filename)) {
-    /* open file for writing */
-    file = fopen(fname, "wb");
+    /* open file for writing with restrictive permissions */
+    int fd = open(fname, O_CREAT | O_WRONLY | O_TRUNC | CURL_O_BINARY,
+                  OPENMODE);
+    if(fd != -1) {
+      file = fdopen(fd, "wb");
+      if(!file)
+        close(fd);
+    }
   }
   else {
     int fd;

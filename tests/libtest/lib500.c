@@ -90,7 +90,23 @@ static CURLcode test_lib500(const char *URL)
   if(!res) {
     res = curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &ipstr);
     if(libtest_arg2) {
-      FILE *moo = fopen(libtest_arg2, "wb");
+      FILE *moo;
+      int fd;
+      /* Create file with restrictive permissions (0600) */
+#ifdef _WIN32
+      fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY,
+                S_IREAD | S_IWRITE);
+#else
+      fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_TRUNC,
+                S_IRUSR | S_IWUSR);
+#endif
+      if(fd != -1) {
+        moo = fdopen(fd, "wb");
+        if(!moo)
+          close(fd);
+      }
+      else
+        moo = NULL;
       if(moo) {
         curl_off_t time_namelookup;
         curl_off_t time_connect;

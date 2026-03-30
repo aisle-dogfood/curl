@@ -37,8 +37,23 @@ static CURLcode test_lib569(const char *URL)
   char *rtsp_session_id;
   int request = 1;
   int i;
+  FILE *idfile;
+  int fd;
 
-  FILE *idfile = fopen(libtest_arg2, "wb");
+  /* Create file with restrictive permissions (0600) */
+#ifdef _WIN32
+  fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY,
+            S_IREAD | S_IWRITE);
+#else
+  fd = open(libtest_arg2, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+#endif
+  if(fd != -1) {
+    idfile = fdopen(fd, "wb");
+    if(!idfile)
+      close(fd);
+  }
+  else
+    idfile = NULL;
   if(!idfile) {
     curl_mfprintf(stderr, "couldn't open the Session ID File\n");
     return TEST_ERR_MAJOR_BAD;

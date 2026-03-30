@@ -836,7 +836,24 @@ static CURLcode etag_store(struct OperationConfig *config,
 
   /* open file for output: */
   if(strcmp(config->etag_save_file, "-")) {
-    FILE *newfile = fopen(config->etag_save_file, "ab");
+    FILE *newfile;
+    /* Create file with restrictive permissions (0600) */
+    int fd;
+#ifdef _WIN32
+    fd = open(config->etag_save_file, O_CREAT | O_WRONLY | O_APPEND | O_BINARY,
+              S_IREAD | S_IWRITE);
+#else
+    fd = open(config->etag_save_file, O_CREAT | O_WRONLY | O_APPEND,
+              S_IRUSR | S_IWUSR);
+#endif
+    if(fd != -1) {
+      newfile = fdopen(fd, "ab");
+      if(!newfile)
+        close(fd);
+    }
+    else
+      newfile = NULL;
+
     if(!newfile) {
       warnf("Failed creating file for saving etags: \"%s\". "
             "Skip this transfer", config->etag_save_file);
@@ -886,11 +903,41 @@ static CURLcode setup_headerfile(struct OperationConfig *config,
         return result;
     }
     if(!per->prev || per->prev->config != config) {
-      newfile = fopen(config->headerfile, "wb");
-      if(newfile)
-        fclose(newfile);
+      /* Truncate file with restrictive permissions (0600) */
+      int fd;
+#ifdef _WIN32
+      fd = open(config->headerfile, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY,
+                S_IREAD | S_IWRITE);
+#else
+      fd = open(config->headerfile, O_CREAT | O_WRONLY | O_TRUNC,
+                S_IRUSR | S_IWUSR);
+#endif
+      if(fd != -1) {
+        newfile = fdopen(fd, "wb");
+        if(newfile)
+          fclose(newfile);
+        else
+          close(fd);
+      }
     }
-    newfile = fopen(config->headerfile, "ab");
+    /* Append with restrictive permissions (0600) */
+    {
+      int fd;
+#ifdef _WIN32
+      fd = open(config->headerfile, O_CREAT | O_WRONLY | O_APPEND | O_BINARY,
+                S_IREAD | S_IWRITE);
+#else
+      fd = open(config->headerfile, O_CREAT | O_WRONLY | O_APPEND,
+                S_IRUSR | S_IWUSR);
+#endif
+      if(fd != -1) {
+        newfile = fdopen(fd, "ab");
+        if(!newfile)
+          close(fd);
+      }
+      else
+        newfile = NULL;
+    }
 
     if(!newfile) {
       errorf("Failed to open %s", config->headerfile);
@@ -995,8 +1042,23 @@ static CURLcode setup_outfile(struct OperationConfig *config,
     FILE *file = fopen(outfile, "ab",
                        "ctx=stm", "rfm=stmlf", "rat=cr", "mrs=0");
 #else
-    /* open file for output: */
-    FILE *file = fopen(per->outfile, "ab");
+    /* open file for output with restrictive permissions (0600): */
+    FILE *file;
+    int fd;
+#ifdef _WIN32
+    fd = open(per->outfile, O_CREAT | O_WRONLY | O_APPEND | O_BINARY,
+              S_IREAD | S_IWRITE);
+#else
+    fd = open(per->outfile, O_CREAT | O_WRONLY | O_APPEND,
+              S_IRUSR | S_IWUSR);
+#endif
+    if(fd != -1) {
+      file = fdopen(fd, "ab");
+      if(!file)
+        close(fd);
+    }
+    else
+      file = NULL;
 #endif
     if(!file) {
       errorf("cannot open '%s'", per->outfile);

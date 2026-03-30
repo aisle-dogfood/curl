@@ -734,8 +734,27 @@ void ourWriteOut(struct OperationConfig *config, struct per_transfer *per,
               FILE *stream2;
               memcpy(fname, ptr, flen);
               fname[flen] = 0;
-              stream2 = fopen(fname, append ? FOPEN_APPENDTEXT :
-                              FOPEN_WRITETEXT);
+              /* Create file with restrictive permissions (0600) */
+              {
+                int fd;
+#ifdef _WIN32
+                fd = open(fname, (append ? O_APPEND : O_TRUNC) |
+                          O_CREAT | O_WRONLY | O_BINARY,
+                          S_IREAD | S_IWRITE);
+#else
+                fd = open(fname, (append ? O_APPEND : O_TRUNC) |
+                          O_CREAT | O_WRONLY,
+                          S_IRUSR | S_IWUSR);
+#endif
+                if(fd != -1) {
+                  stream2 = fdopen(fd, append ? FOPEN_APPENDTEXT :
+                                   FOPEN_WRITETEXT);
+                  if(!stream2)
+                    close(fd);
+                }
+                else
+                  stream2 = NULL;
+              }
               if(stream2) {
                 /* only change if the open worked */
                 if(fclose_stream)
