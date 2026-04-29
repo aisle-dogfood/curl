@@ -90,7 +90,7 @@
     if(source->var) {                        \
       dest->var = strdup(source->var);       \
       if(!dest->var)                         \
-        return FALSE;                        \
+        goto error;                          \
     }                                        \
     else                                     \
       dest->var = NULL;                      \
@@ -99,7 +99,7 @@
 #define CLONE_BLOB(var)                        \
   do {                                         \
     if(blobdup(&dest->var, source->var))       \
-      return FALSE;                            \
+      goto error;                              \
   } while(0)
 
 static CURLcode blobdup(struct curl_blob **dest,
@@ -240,6 +240,9 @@ bool Curl_ssl_conn_config_match(struct Curl_easy *data,
 static bool clone_ssl_primary_config(struct ssl_primary_config *source,
                                      struct ssl_primary_config *dest)
 {
+  /* Initialize all pointers to NULL to ensure safe cleanup on failure */
+  memset(dest, 0, sizeof(struct ssl_primary_config));
+  
   dest->version = source->version;
   dest->version_max = source->version_max;
   dest->verifypeer = source->verifypeer;
@@ -267,6 +270,11 @@ static bool clone_ssl_primary_config(struct ssl_primary_config *source,
 #endif
 
   return TRUE;
+
+error:
+  /* Clean up any allocated memory on failure */
+  free_primary_ssl_config(dest);
+  return FALSE;
 }
 
 static void free_primary_ssl_config(struct ssl_primary_config *sslc)
