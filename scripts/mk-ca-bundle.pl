@@ -33,6 +33,7 @@
 # Hacked by Guenter Knauf.
 #
 use Encode;
+use File::Temp qw(tempfile);
 use Getopt::Std;
 use MIME::Base64;
 use strict;
@@ -204,6 +205,52 @@ sub report($@) {
     print STDERR $output . "\n" unless $opt_q;
 }
 
+sub read_command_output(@) {
+    my @cmd = @_;
+    my $pid = open(my $fh, '-|', @cmd);
+    return (0, '') if(!defined($pid));
+
+    my $output = '';
+    my $buffer = '';
+    my $max_output = 64 * 1024;
+    while(read($fh, $buffer, 8192)) {
+        $output .= $buffer;
+        if(length($output) > $max_output) {
+            close($fh);
+            die "Command '@cmd' produced too much output";
+        }
+    }
+
+    my $ok = close($fh);
+
+    return ($ok, $output);
+}
+
+sub run_command_with_input_to_fh($$@) {
+    my $input = shift;
+    my $output_fh = shift;
+    my @cmd = @_;
+    my ($input_fh, $input_filename) = tempfile(UNLINK => 0);
+
+    print {$input_fh} $input or die "Couldn't write temporary input for '@cmd': $!";
+    close($input_fh) or die "Couldn't close temporary input for '@cmd': $!";
+
+    my $pid = open(my $reader, '-|', @cmd, '-in', $input_filename);
+    if(!defined($pid)) {
+        unlink($input_filename) or die "Couldn't remove temporary input for '@cmd': $!";
+        die "Couldn't execute '@cmd': $!";
+    }
+
+    my $buffer = '';
+    while(read($reader, $buffer, 8192)) {
+        print {$output_fh} $buffer or die "Couldn't write output for '@cmd': $!";
+    }
+
+    my $ok = close($reader);
+    unlink($input_filename) or die "Couldn't remove temporary input for '@cmd': $!";
+    die "Command '@cmd' failed" if(!$ok);
+}
+
 sub is_in_list($@) {
     my $target = shift;
 
@@ -241,13 +288,15 @@ sub parse_csv_param($$@) {
 sub sha256 {
     my $result;
     if($Digest::SHA::VERSION || $Digest::SHA::PurePerl::VERSION) {
-        open(FILE, $_[0]) or die "Can't open '$_[0]': $!";
+        open(FILE, '<', $_[0]) or die "Can't open '$_[0]': $!";
         binmode(FILE);
         $result = $MOD_SHA->new(256)->addfile(*FILE)->hexdigest;
         close(FILE);
     } else {
         # Use OpenSSL command if Perl Digest::SHA modules not available
-        $result = `"$openssl" dgst -r -sha256 "$_[0]"`;
+        my ($ok, $output) = read_command_output($openssl, 'dgst', '-r', '-sha256', $_[0]);
+        die "Failed to hash '$_[0]' with $openssl" if(!$ok);
+        $result = $output;
         $result =~ s/^([0-9a-f]{64}) .+/$1/is;
     }
     return $result;
@@ -256,7 +305,7 @@ sub sha256 {
 
 sub oldhash {
     my $hash = "";
-    open(C, "<$_[0]") || return 0;
+    open(C, '<', $_[0]) || return 0;
     while(<C>) {
         chomp;
         if($_ =~ /^\#\# SHA256: (.*)/) {
@@ -307,14 +356,21 @@ if(!$opt_n) {
 
     # If we have an HTTPS URL then use curl
     if($url =~ /^https:\/\//i) {
-        my $curl = `curl -V`;
-        if($curl) {
+        my ($curl_ok, $curl) = read_command_output('curl', '-V');
+        if($curl_ok && $curl) {
             if($curl =~ /^Protocols:.* https( |$)/m) {
                 report "Get certdata with curl!";
-                my $proto = !$opt_k ? "--proto =https" : "";
-                my $quiet = $opt_q ? "-s" : "";
-                my @out = `curl -Lw %{response_code} $proto $quiet -o "$txt" "$url"`;
-                if(!$? && @out && $out[0] == 200) {
+                my @curlcmd = ('curl', '-L', '-w', '%{response_code}');
+                if(!$opt_k) {
+                    push @curlcmd, ('--proto', '=https', '--proto-redir', '=https');
+                } else {
+                    push @curlcmd, ('--proto-redir', '=https,http');
+                }
+                push @curlcmd, '-s' if($opt_q);
+                push @curlcmd, ('-o', $txt, $url);
+                my ($ok, $output) = read_command_output(@curlcmd);
+                $output =~ s/\s+\z//;
+                if($ok && length($output) && $output == 200) {
                     $fetched = 1;
                     report "Downloaded $txt";
                 }
@@ -393,9 +449,9 @@ my $currentdate = scalar gmtime($filedate);
 
 my $format = $opt_t ? "plain text and " : "";
 if($stdout) {
-    open(CRT, '> -') or die "Couldn't open STDOUT: $!\n";
+    open(CRT, '>&', \*STDOUT) or die "Couldn't open STDOUT: $!\n";
 } else {
-    open(CRT,">$crt.~") or die "Couldn't open $crt.~: $!\n";
+    open(CRT, '>', "$crt.~") or die "Couldn't open $crt.~: $!\n";
 }
 print CRT <<EOT;
 ##
@@ -434,7 +490,7 @@ my @precert;
 my $cka_value;
 my $valid = 0;
 
-open(TXT,"$txt") or die "Couldn't open $txt: $!\n";
+open(TXT, '<', $txt) or die "Couldn't open $txt: $!\n";
 while(<TXT>) {
     if(/\*\*\*\*\* BEGIN LICENSE BLOCK \*\*\*\*\*/) {
         print CRT;
@@ -616,31 +672,24 @@ while(<TXT>) {
             if(!$opt_t) {
                 print CRT $pem;
             } else {
-                my $pipe = "";
                 foreach my $hash (@included_signature_algorithms) {
-                    $pipe = "|$openssl x509 -" . $hash . " -fingerprint -noout -inform PEM";
-                    if(!$stdout) {
-                        $pipe .= " >> $crt.~";
-                        close(CRT) or die "Couldn't close $crt.~: $!";
-                    }
-                    open(TMP, $pipe) or die "Couldn't open openssl pipe: $!";
-                    print TMP $pem;
-                    close(TMP) or die "Couldn't close openssl pipe: $!";
-                    if(!$stdout) {
-                        open(CRT, ">>$crt.~") or die "Couldn't open $crt.~: $!";
-                    }
+                    run_command_with_input_to_fh($pem,
+                                                 \*CRT,
+                                                 $openssl,
+                                                 'x509',
+                                                 '-' . lc($hash),
+                                                 '-fingerprint',
+                                                 '-noout',
+                                                 '-inform',
+                                                 'PEM');
                 }
-                $pipe = "|$openssl x509 -text -inform PEM";
-                if(!$stdout) {
-                    $pipe .= " >> $crt.~";
-                    close(CRT) or die "Couldn't close $crt.~: $!";
-                }
-                open(TMP, $pipe) or die "Couldn't open openssl pipe: $!";
-                print TMP $pem;
-                close(TMP) or die "Couldn't close openssl pipe: $!";
-                if(!$stdout) {
-                    open(CRT, ">>$crt.~") or die "Couldn't open $crt.~: $!";
-                }
+                run_command_with_input_to_fh($pem,
+                                             \*CRT,
+                                             $openssl,
+                                             'x509',
+                                             '-text',
+                                             '-inform',
+                                             'PEM');
             }
             report "Processed: $caname" if($opt_v);
             $certnum++;
