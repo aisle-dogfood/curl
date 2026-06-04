@@ -46,6 +46,9 @@ int Curl_sec_read_msg(struct Curl_easy *data, struct connectdata *conn, char *,
                       enum protection_level);
 CURLcode Curl_sec_login(struct Curl_easy *, struct connectdata *);
 int Curl_sec_request_prot(struct connectdata *conn, const char *level);
+#ifdef UNITTESTS
+CURLcode Curl_krb5_decode_len(uint32_t netlen, size_t *len);
+#endif
 #else
 #define Curl_sec_conn_init(x)     Curl_nop_stmt
 #define Curl_sec_conn_destroy(x)  Curl_nop_stmt
