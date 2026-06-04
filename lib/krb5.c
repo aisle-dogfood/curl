@@ -523,32 +523,43 @@ socket_write(struct Curl_easy *data, int sockindex, const void *to,
   return CURLE_OK;
 }
 
+UNITTEST CURLcode Curl_krb5_decode_len(uint32_t netlen, size_t *len)
+{
+  size_t decoded_len = (size_t)ntohl(netlen);
+
+  if(!decoded_len)
+    return CURLE_RECV_ERROR;
+  if(decoded_len > CURL_MAX_INPUT_LENGTH)
+    return CURLE_TOO_LARGE;
+
+  *len = decoded_len;
+  return CURLE_OK;
+}
+
 static CURLcode krb5_read_data(struct Curl_easy *data, int sockindex,
                                struct krb5buffer *buf)
 {
   struct connectdata *conn = data->conn;
-  int len;
+  uint32_t netlen;
+  size_t len;
   CURLcode result;
-  int nread;
+  size_t nread;
+  int decoded_len;
 
-  result = socket_read(data, sockindex, &len, sizeof(len));
+  result = socket_read(data, sockindex, &netlen, sizeof(netlen));
   if(result)
     return result;
 
-  if(len) {
-    len = (int)ntohl((uint32_t)len);
-    if(len > CURL_MAX_INPUT_LENGTH)
-      return CURLE_TOO_LARGE;
+  result = Curl_krb5_decode_len(netlen, &len);
+  if(result)
+    return result;
 
-    curlx_dyn_reset(&buf->buf);
-  }
-  else
-    return CURLE_RECV_ERROR;
+  curlx_dyn_reset(&buf->buf);
 
   do {
     char buffer[1024];
-    nread = CURLMIN(len, (int)sizeof(buffer));
-    result = socket_read(data, sockindex, buffer, (size_t)nread);
+    nread = CURLMIN(len, sizeof(buffer));
+    result = socket_read(data, sockindex, buffer, nread);
     if(result)
       return result;
     result = curlx_dyn_addn(&buf->buf, buffer, nread);
@@ -557,12 +568,13 @@ static CURLcode krb5_read_data(struct Curl_easy *data, int sockindex,
     len -= nread;
   } while(len);
   /* this decodes the dynbuf *in place* */
-  nread = conn->mech->decode(conn->app_data,
-                             curlx_dyn_ptr(&buf->buf),
-                             len, conn->data_prot, conn);
-  if(nread < 0)
+  decoded_len = conn->mech->decode(conn->app_data,
+                                   curlx_dyn_ptr(&buf->buf),
+                                   curlx_uztosi(curlx_dyn_len(&buf->buf)),
+                                   conn->data_prot, conn);
+  if(decoded_len < 0)
     return CURLE_RECV_ERROR;
-  curlx_dyn_setlen(&buf->buf, nread);
+  curlx_dyn_setlen(&buf->buf, decoded_len);
   buf->index = 0;
   return CURLE_OK;
 }

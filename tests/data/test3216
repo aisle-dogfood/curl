@@ -1,0 +1,21 @@
+<testcase>
+<info>
+<keywords>
+unittest
+krb5
+GSS-API
+</keywords>
+</info>
+
+#
+# Client-side
+<client>
+<features>
+unittest
+GSS-API
+</features>
+<name>
+krb5 length-prefix validation unit tests
+</name>
+</client>
+</testcase>
