@@ -28,6 +28,7 @@ import json
 import logging
 import os
 import re
+import stat
 import pytest
 
 from testenv import Env, CurlClient, LocalClient
@@ -475,6 +476,55 @@ class TestSSLUse:
         r = curl.http_get(url=url, alpn_proto=proto, extra_args=xargs)
         assert r.exit_code == 0, f'{r}'
         assert r.json['SSL_SESSION_RESUMED'] == 'Resumed', f'{r.json}\n{r.dump_logs()}'
+
+    @pytest.mark.skipif(condition=not Env.curl_has_feature('SSLS-EXPORT'),
+                        reason='curl lacks SSL session export support')
+    @pytest.mark.skipif(condition=os.name == 'nt',
+                        reason='requires POSIX file permissions')
+    def test_17_15a_session_export_permissions(self, env: Env, httpd):
+        proto = 'http/1.1'
+        run_env = os.environ.copy()
+        run_env['CURL_DEBUG'] = 'ssl,ssls'
+        session_file = os.path.join(env.gen_dir, 'test_17_15a.sessions')
+        if os.path.exists(session_file):
+            os.remove(session_file)
+        xargs = ['--tls-max', '1.3', '--tlsv1.3', '--ssl-sessions', session_file]
+        curl = CurlClient(env=env, run_env=run_env)
+        url = f'https://{env.authority_for(env.domain1, proto)}/curltest/sslinfo'
+        old_umask = os.umask(0)
+        try:
+            r = curl.http_get(url=url, alpn_proto=proto, extra_args=xargs)
+        finally:
+            os.umask(old_umask)
+        assert r.exit_code == 0, f'{r}'
+        mode = stat.S_IMODE(os.stat(session_file).st_mode)
+        assert mode == 0o600, oct(mode)
+
+    @pytest.mark.skipif(condition=not Env.curl_has_feature('SSLS-EXPORT'),
+                        reason='curl lacks SSL session export support')
+    @pytest.mark.skipif(condition=os.name == 'nt' or not hasattr(os, 'symlink'),
+                        reason='requires POSIX symlink support')
+    def test_17_15b_session_export_replaces_symlink(self, env: Env, httpd):
+        proto = 'http/1.1'
+        run_env = os.environ.copy()
+        run_env['CURL_DEBUG'] = 'ssl,ssls'
+        protected_file = os.path.join(env.gen_dir, 'test_17_15b.protected')
+        session_file = os.path.join(env.gen_dir, 'test_17_15b.sessions')
+        with open(protected_file, 'w', encoding='utf-8') as f:
+            f.write('do not overwrite\n')
+        if os.path.lexists(session_file):
+            os.unlink(session_file)
+        os.symlink(protected_file, session_file)
+        xargs = ['--tls-max', '1.3', '--tlsv1.3', '--ssl-sessions', session_file]
+        curl = CurlClient(env=env, run_env=run_env)
+        url = f'https://{env.authority_for(env.domain1, proto)}/curltest/sslinfo'
+        r = curl.http_get(url=url, alpn_proto=proto, extra_args=xargs)
+        assert r.exit_code == 0, f'{r}'
+        with open(protected_file, 'r', encoding='utf-8') as f:
+            assert f.read() == 'do not overwrite\n'
+        assert not os.path.islink(session_file)
+        with open(session_file, 'r', encoding='utf-8') as f:
+            assert '# Your SSL session cache.' in f.read()
 
     # verify the ciphers are ignored when talking TLSv1.3 only
     # see issue #16232
